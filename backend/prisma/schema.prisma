@@ -1,0 +1,177 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  ADMIN
+  USER
+}
+
+enum ReservationStatus {
+  HELD
+  CONFIRMED
+  CANCELLED
+}
+
+enum SeatStatus {
+  AVAILABLE
+  HELD
+  BOOKED
+}
+
+enum ScreenStatus { 
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  password  String
+  role      UserRole @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  reservations Reservation[]
+
+  @@map("user")
+}
+
+model Movie {
+  id           Int      @id @default(autoincrement())
+  name         String
+  description  String
+  duration     Int
+  posterImgUrl String
+  movieType    String
+  rating       Float
+  language     String
+  genre        String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  screens    Screening[]
+
+  @@index([language])
+  @@map("movie")
+}
+
+model Hall {
+  id        Int      @id @default(autoincrement())
+  name      String
+  capacity  Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  screens    Screening[]
+  seats      Seat[]
+
+  @@map("hall")
+}
+
+model Screening {
+  id          Int      @id @default(autoincrement())
+  hallId      Int
+  movieId     Int
+  screenDate  DateTime
+  screenTime  String
+  status      ScreenStatus @default(SCHEDULED)
+  price       Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  hall        Hall @relation(fields: [hallId], references: [id], onDelete: Cascade)
+  movie       Movie @relation(fields: [movieId], references: [id], onDelete: Cascade)
+  reservations Reservation[]
+
+  @@index([movieId])
+  @@index([screenDate])
+  @@map("screening")
+}
+
+model Seat {
+  id          Int       @id @default(autoincrement())
+  hallId      Int
+  status      SeatStatus @default(AVAILABLE)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  hall        Hall @relation(fields: [hallId], references: [id],onDelete: Cascade)
+  reservations Reservation[]
+
+  @@map("seat")
+}
+
+model Reservation {
+  id          Int       @id @default(autoincrement())
+  screeningId    Int
+  seatId      Int
+  userId      Int
+  status      ReservationStatus @default(HELD)
+  held_until  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  screen      Screening @relation(fields: [screeningId], references: [id], onDelete: Cascade)
+  seat        Seat @relation(fields: [seatId], references: [id], onDelete: Cascade)
+  payment     Payment?
+
+  @@index([userId])
+  @@index([screeningId])
+  @@index([seatId])
+  @@map("reservation")
+}
+
+model Payment {
+  id                Int      @id @default(autoincrement())
+  reservationId     Int @unique
+  amount            Int
+  currency          String
+  status            PaymentStatus @default(PENDING)
+  stripePaymentId   String?
+  stripeSessionId   String
+  stripeEventId     String? @unique  
+  refundId          String?
+  refundedAt        DateTime?
+  disputed          Boolean?
+  disputeReason     String?
+  disputedAt        DateTime? 
+  paymentDate       DateTime @default(now())
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  reservation      Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+
+  @@map("payment")
+}
+model RefundPolicy {
+  id              Int      @id @default(autoincrement())
+  hoursFrom       Int
+  hoursTo         Int
+  refundPercent   Float
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([hoursFrom, hoursTo])
+  @@map("refund_policy")
+}
+
+/*
+  -- >48hrs  → full refund (100%)
+  -- 24-48hrs → 50% refund 
+  -- <24hrs  → no refund (0%)
+*/

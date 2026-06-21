@@ -1,0 +1,10 @@
+version: '3.8'
+services:
+  redis-cache:
+    image: redis7
+    ports:
+      - '6379:6379'
+  redis-pubsub:
+    image: redis7
+    ports:
+      - '6380:6380'
