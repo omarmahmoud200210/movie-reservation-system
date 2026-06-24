@@ -1,27 +1,9 @@
 import { Global, Module } from '@nestjs/common';
-import Redis from 'ioredis';
-import { REDIS_CACHE, REDIS_PUBSUB } from './redis.constants';
-
+import RedisCache from './redis.cache';
+import RedisPubSub from './redis.pubsub';
 @Global()
 @Module({
-  providers: [
-    {
-      provide: REDIS_CACHE,
-      useFactory: () =>
-        new Redis({
-          host: process.env.REDIS_CACHE_HOST,
-          port: Number(process.env.REDIS_CACHE_PORT),
-        }),
-    },
-    {
-      provide: REDIS_PUBSUB,
-      useFactory: () =>
-        new Redis({
-          host: process.env.REDIS_PUBSUB_HOST,
-          port: Number(process.env.REDIS_PUBSUB_PORT),
-        }),
-    },
-  ],
-  exports: [REDIS_CACHE, REDIS_PUBSUB],
+  providers: [RedisCache, RedisPubSub],
+  exports: [RedisCache, RedisPubSub],
 })
 export class RedisModule {}

@@ -1,10 +1,9 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
-import Redis from 'ioredis';
-import { REDIS_CACHE } from '../redis/redis.constants';
+import { BadRequestException, Injectable } from '@nestjs/common';
+import RedisCache from '../redis/redis.cache';
 
 @Injectable()
 export class OtpService {
-  constructor(@Inject(REDIS_CACHE) private readonly redis: Redis) {}
+  constructor(private readonly redis: RedisCache) {}
 
   private gen(): string {
     return Math.floor(100000 + Math.random() * 900000).toString();
@@ -19,14 +18,18 @@ export class OtpService {
     }
     const code = this.gen();
     const ttl = Number(process.env.OTP_TTL_SECONDS);
-    await this.redis.set(`otp:${email}`, code, 'EX', ttl);
-    await this.redis.del(`otp_attempts:${email}`);
-    await this.redis.set(
-      cooldownKey,
-      '1',
-      'EX',
-      Number(process.env.OTP_RESEND_COOLDOWN_SECONDS),
-    );
+    // These three writes are independent, so batch them into one round-trip.
+    await this.redis
+      .pipeline()
+      .set(`otp:${email}`, code, 'EX', ttl)
+      .del(`otp_attempts:${email}`)
+      .set(
+        cooldownKey,
+        '1',
+        'EX',
+        Number(process.env.OTP_RESEND_COOLDOWN_SECONDS),
+      )
+      .exec();
     return code;
   }
 
