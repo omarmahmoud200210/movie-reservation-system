@@ -1,0 +1,188 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1180" viewBox="0 0 1600 1180" font-family="Segoe UI, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#475569"/>
+    </marker>
+    <marker id="arrowPub" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#9333ea"/>
+    </marker>
+    <marker id="arrowObs" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#0d9488"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1600" height="1180" fill="#f8fafc"/>
+  <text x="800" y="42" text-anchor="middle" font-size="28" font-weight="700" fill="#0f172a">Movie Reservation System — System Design</text>
+  <text x="800" y="66" text-anchor="middle" font-size="14" fill="#64748b">NestJS · PostgreSQL · Redis (cache + pub/sub) · Socket.io · Stripe · Prometheus/Grafana</text>
+
+  <!-- ===== CLIENT TIER ===== -->
+  <text x="40" y="116" font-size="13" font-weight="700" fill="#3b82f6">CLIENT TIER</text>
+  <rect x="620" y="86" width="160" height="60" rx="10" fill="#dbeafe" stroke="#3b82f6" stroke-width="2"/>
+  <text x="700" y="122" text-anchor="middle" font-size="16" font-weight="600" fill="#1e3a8a">Browser</text>
+  <rect x="820" y="86" width="160" height="60" rx="10" fill="#dbeafe" stroke="#3b82f6" stroke-width="2"/>
+  <text x="900" y="122" text-anchor="middle" font-size="16" font-weight="600" fill="#1e3a8a">Mobile</text>
+
+  <!-- ===== EDGE ===== -->
+  <text x="40" y="236" font-size="13" font-weight="700" fill="#6b7280">EDGE</text>
+  <rect x="620" y="206" width="360" height="62" rx="10" fill="#e5e7eb" stroke="#6b7280" stroke-width="2"/>
+  <text x="800" y="232" text-anchor="middle" font-size="17" font-weight="600" fill="#374151">Nginx Reverse Proxy</text>
+  <text x="800" y="253" text-anchor="middle" font-size="12" fill="#6b7280">TLS termination · HTTPS / WSS</text>
+
+  <!-- ===== APP TIER ===== -->
+  <text x="40" y="360" font-size="13" font-weight="700" fill="#16a34a">APPLICATION TIER (NestJS)</text>
+
+  <!-- HTTP API -->
+  <rect x="220" y="330" width="480" height="270" rx="12" fill="#dcfce7" stroke="#22c55e" stroke-width="2"/>
+  <text x="460" y="357" text-anchor="middle" font-size="17" font-weight="700" fill="#166534">NestJS HTTP API (REST)</text>
+  <line x1="240" y1="368" x2="680" y2="368" stroke="#86efac" stroke-width="1.5"/>
+  <text x="240" y="392" font-size="13" fill="#14532d">• AuthModule — /auth/register · /login · /logout (JWT)</text>
+  <text x="240" y="414" font-size="13" fill="#14532d">• MoviesModule — /movies · /movies/:id</text>
+  <text x="240" y="436" font-size="13" fill="#14532d">• ScreeningsModule — /screenings/:id/seats</text>
+  <text x="240" y="458" font-size="13" fill="#14532d">• ReservationsModule — /reservations (SELECT FOR UPDATE)</text>
+  <text x="240" y="480" font-size="13" fill="#14532d">• UsersModule — /users/me · /settings</text>
+  <text x="240" y="502" font-size="13" fill="#14532d">• PaymentsModule — /payments/webhook</text>
+  <line x1="240" y1="514" x2="680" y2="514" stroke="#86efac" stroke-width="1.5"/>
+  <text x="240" y="538" font-size="12" fill="#166534">Rate limit: middleware (IP) → routing → guard (user ID)</text>
+  <text x="240" y="558" font-size="12" fill="#166534">Global ValidationPipe (whitelist) · Response/Logging interceptors</text>
+  <text x="240" y="582" font-size="12" font-weight="600" fill="#0d9488">▣ /metrics (Prometheus exporter)</text>
+
+  <!-- WS Gateway -->
+  <rect x="820" y="330" width="420" height="180" rx="12" fill="#dcfce7" stroke="#22c55e" stroke-width="2"/>
+  <text x="1030" y="357" text-anchor="middle" font-size="17" font-weight="700" fill="#166534">NestJS WS Gateway (Socket.io / WSS)</text>
+  <line x1="840" y1="368" x2="1220" y2="368" stroke="#86efac" stroke-width="1.5"/>
+  <text x="840" y="392" font-size="13" fill="#14532d">• Rooms: screening:{id}</text>
+  <text x="840" y="414" font-size="13" fill="#14532d">• WsJwtGuard on every connection (id from JWT)</text>
+  <text x="840" y="436" font-size="13" fill="#14532d">• Emits: seat:reserved · cancelled · hold_expired</text>
+  <text x="840" y="458" font-size="13" fill="#14532d">• seat:initial_state on (re)connect → full re-sync</text>
+  <text x="840" y="486" font-size="12" fill="#166534">Subscribes to Redis #2; reads/invalidates seat map in Redis #1</text>
+
+  <!-- Cron Service -->
+  <rect x="820" y="560" width="420" height="120" rx="12" fill="#dcfce7" stroke="#22c55e" stroke-width="2"/>
+  <text x="1030" y="587" text-anchor="middle" font-size="16" font-weight="700" fill="#166534">Cron Service (@nestjs/schedule)</text>
+  <line x1="840" y1="598" x2="1220" y2="598" stroke="#86efac" stroke-width="1.5"/>
+  <text x="840" y="622" font-size="13" fill="#14532d">• expireHolds — every 1 min → release seat + publish</text>
+  <text x="840" y="644" font-size="13" fill="#14532d">• completeScreenings — every 15 min</text>
+  <text x="840" y="666" font-size="13" fill="#14532d">• paymentReconciliation — every 5 min (timed_out)</text>
+
+  <!-- ===== EXTERNAL ===== -->
+  <text x="1300" y="360" font-size="13" font-weight="700" fill="#8b5cf6">EXTERNAL</text>
+  <rect x="1300" y="380" width="260" height="100" rx="12" fill="#ede9fe" stroke="#8b5cf6" stroke-width="2"/>
+  <text x="1430" y="412" text-anchor="middle" font-size="16" font-weight="700" fill="#5b21b6">Stripe</text>
+  <text x="1430" y="436" text-anchor="middle" font-size="12" fill="#6d28d9">Checkout · Refunds API</text>
+  <text x="1430" y="456" text-anchor="middle" font-size="12" fill="#6d28d9">Webhooks (signed + idempotent)</text>
+
+  <!-- ===== DATA TIER ===== -->
+  <text x="40" y="726" font-size="13" font-weight="700" fill="#ef4444">DATA TIER</text>
+
+  <!-- PostgreSQL -->
+  <rect x="120" y="700" width="320" height="170" rx="12" fill="#fee2e2" stroke="#ef4444" stroke-width="2"/>
+  <text x="280" y="727" text-anchor="middle" font-size="16" font-weight="700" fill="#991b1b">PostgreSQL (source of truth)</text>
+  <line x1="140" y1="738" x2="420" y2="738" stroke="#fca5a5" stroke-width="1.5"/>
+  <text x="140" y="762" font-size="12" fill="#7f1d1d">users · movies · halls · seats</text>
+  <text x="140" y="784" font-size="12" fill="#7f1d1d">screenings · reservations · payments</text>
+  <text x="140" y="810" font-size="12" fill="#991b1b">Repeatable Read + SELECT FOR UPDATE</text>
+  <text x="140" y="832" font-size="12" fill="#991b1b">UNIQUE(seat_id, screening_id)</text>
+  <text x="140" y="852" font-size="12" fill="#991b1b">  WHERE status IN (held, confirmed)</text>
+
+  <!-- Redis #1 -->
+  <rect x="500" y="700" width="320" height="170" rx="12" fill="#fef3c7" stroke="#f59e0b" stroke-width="2"/>
+  <text x="660" y="727" text-anchor="middle" font-size="16" font-weight="700" fill="#92400e">Redis #1 — Cache + Rate Limit</text>
+  <line x1="520" y1="738" x2="800" y2="738" stroke="#fcd34d" stroke-width="1.5"/>
+  <text x="520" y="762" font-size="12" fill="#78350f">movie:{id} (1h)</text>
+  <text x="520" y="784" font-size="12" fill="#78350f">seat_map:screening:{id} (cold only)</text>
+  <text x="520" y="806" font-size="12" fill="#78350f">reservation_history:user:{id} (30m)</text>
+  <text x="520" y="832" font-size="12" fill="#92400e">rate_limit:ip:{ip}:{endpoint}</text>
+  <text x="520" y="854" font-size="12" fill="#92400e">rate_limit:user:{id}:{endpoint}</text>
+
+  <!-- Redis #2 -->
+  <rect x="880" y="700" width="320" height="170" rx="12" fill="#fef3c7" stroke="#f59e0b" stroke-width="2"/>
+  <text x="1040" y="727" text-anchor="middle" font-size="16" font-weight="700" fill="#92400e">Redis #2 — Pub/Sub Bridge</text>
+  <line x1="900" y1="738" x2="1180" y2="738" stroke="#fcd34d" stroke-width="1.5"/>
+  <text x="900" y="764" font-size="12" fill="#78350f">channel: seat:hold_expired</text>
+  <text x="900" y="788" font-size="12" fill="#78350f">  (Cron → WS Gateway)</text>
+  <text x="900" y="814" font-size="12" fill="#78350f">channel: seat:status_changed</text>
+  <text x="900" y="838" font-size="12" fill="#78350f">  (Reservation Svc → WS Gateway)</text>
+
+  <!-- ===== OBSERVABILITY ===== -->
+  <text x="40" y="956" font-size="13" font-weight="700" fill="#0d9488">OBSERVABILITY</text>
+  <rect x="180" y="930" width="220" height="70" rx="10" fill="#ccfbf1" stroke="#14b8a6" stroke-width="2"/>
+  <text x="290" y="962" text-anchor="middle" font-size="15" font-weight="600" fill="#115e59">Prometheus</text>
+  <text x="290" y="982" text-anchor="middle" font-size="11" fill="#0f766e">scrape /metrics · 15s</text>
+  <rect x="450" y="930" width="220" height="70" rx="10" fill="#ccfbf1" stroke="#14b8a6" stroke-width="2"/>
+  <text x="560" y="962" text-anchor="middle" font-size="15" font-weight="600" fill="#115e59">Grafana</text>
+  <text x="560" y="982" text-anchor="middle" font-size="11" fill="#0f766e">live dashboards</text>
+  <rect x="720" y="930" width="220" height="70" rx="10" fill="#ccfbf1" stroke="#14b8a6" stroke-width="2"/>
+  <text x="830" y="962" text-anchor="middle" font-size="15" font-weight="600" fill="#115e59">Artillery</text>
+  <text x="830" y="982" text-anchor="middle" font-size="11" fill="#0f766e">load test → Nginx</text>
+
+  <!-- ============ ARROWS ============ -->
+  <!-- clients -> nginx -->
+  <path d="M700,146 L760,206" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+  <path d="M900,146 L840,206" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+
+  <!-- nginx -> HTTP API -->
+  <path d="M700,268 C600,300 520,300 480,330" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="540" y="312" font-size="11" fill="#475569">HTTPS</text>
+  <!-- nginx -> WS Gateway -->
+  <path d="M900,268 C1000,300 1020,300 1030,330" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="1010" y="312" font-size="11" fill="#475569">WSS</text>
+
+  <!-- HTTP API -> PostgreSQL -->
+  <path d="M380,600 C340,650 320,660 300,700" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="305" y="660" font-size="11" fill="#475569">SQL + lock</text>
+  <!-- HTTP API -> Redis #1 -->
+  <path d="M500,600 C560,650 600,660 640,700" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="585" y="660" font-size="11" fill="#475569">cache / rate</text>
+  <!-- HTTP API (Reservation Svc) -> Redis #2 publish -->
+  <path d="M640,560 C800,640 950,660 1000,700" fill="none" stroke="#9333ea" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arrowPub)"/>
+  <text x="820" y="612" font-size="11" fill="#9333ea">publish status_changed</text>
+
+  <!-- WS Gateway -> Redis #1 -->
+  <path d="M880,510 C820,600 760,650 720,700" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="770" y="600" font-size="11" fill="#475569">read / invalidate</text>
+  <!-- Redis #2 -> WS Gateway (subscribe) -->
+  <path d="M1100,700 C1130,620 1120,560 1100,510" fill="none" stroke="#9333ea" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arrowPub)"/>
+  <text x="1110" y="600" font-size="11" fill="#9333ea">subscribe</text>
+
+  <!-- Cron -> PostgreSQL -->
+  <path d="M820,650 C620,690 480,700 420,740" fill="none" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="600" y="690" font-size="11" fill="#475569">find/expire holds</text>
+  <!-- Cron -> Redis #2 publish -->
+  <path d="M1040,680 L1040,700" fill="none" stroke="#9333ea" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arrowPub)"/>
+  <text x="1048" y="694" font-size="11" fill="#9333ea">publish hold_expired</text>
+
+  <!-- Payments <-> Stripe -->
+  <path d="M700,500 C1050,520 1200,470 1300,440" fill="none" stroke="#8b5cf6" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="1000" y="500" font-size="11" fill="#8b5cf6">checkout / refund</text>
+  <path d="M1300,460 C1150,520 950,520 700,520" fill="none" stroke="#8b5cf6" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="980" y="540" font-size="11" fill="#8b5cf6">signed webhook → /payments/webhook</text>
+
+  <!-- Prometheus -> /metrics (HTTP API) -->
+  <path d="M290,930 C290,760 320,640 380,600" fill="none" stroke="#0d9488" stroke-width="2" stroke-dasharray="4 4" marker-end="url(#arrowObs)"/>
+  <text x="150" y="800" font-size="11" fill="#0d9488">scrape /metrics</text>
+  <!-- Grafana -> Prometheus -->
+  <path d="M450,965 L400,965" fill="none" stroke="#0d9488" stroke-width="2" marker-end="url(#arrowObs)"/>
+  <!-- Artillery -> Nginx (load) -->
+  <path d="M830,930 C840,560 820,320 800,268" fill="none" stroke="#0d9488" stroke-width="2" stroke-dasharray="4 4" marker-end="url(#arrowObs)"/>
+  <text x="845" y="700" font-size="11" fill="#0d9488">load traffic</text>
+
+  <!-- ============ LEGEND ============ -->
+  <rect x="1240" y="700" width="320" height="300" rx="10" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5"/>
+  <text x="1260" y="728" font-size="14" font-weight="700" fill="#0f172a">Legend</text>
+  <line x1="1260" y1="748" x2="1320" y2="748" stroke="#475569" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="1330" y="752" font-size="12" fill="#334155">request / data flow</text>
+  <line x1="1260" y1="776" x2="1320" y2="776" stroke="#9333ea" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#arrowPub)"/>
+  <text x="1330" y="780" font-size="12" fill="#334155">Redis pub/sub</text>
+  <line x1="1260" y1="804" x2="1320" y2="804" stroke="#8b5cf6" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="1330" y="808" font-size="12" fill="#334155">external (Stripe)</text>
+  <line x1="1260" y1="832" x2="1320" y2="832" stroke="#0d9488" stroke-width="2" stroke-dasharray="4 4" marker-end="url(#arrowObs)"/>
+  <text x="1330" y="836" font-size="12" fill="#334155">observability</text>
+
+  <text x="1260" y="872" font-size="12" font-weight="700" fill="#0f172a">Reservation flow</text>
+  <text x="1260" y="892" font-size="11" fill="#475569">1. lock seat (FOR UPDATE)</text>
+  <text x="1260" y="910" font-size="11" fill="#475569">2. insert reservation (held)</text>
+  <text x="1260" y="928" font-size="11" fill="#475569">3. publish status_changed</text>
+  <text x="1260" y="946" font-size="11" fill="#475569">4. WS emits to room + cache bust</text>
+  <text x="1260" y="964" font-size="11" fill="#475569">5. Stripe pay → confirmed</text>
+  <text x="1260" y="986" font-size="11" fill="#475569">Cron releases expired holds → pub/sub</text>
+</svg>
