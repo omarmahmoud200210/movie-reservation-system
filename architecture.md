@@ -514,7 +514,7 @@ src/
 
 ## Build Order (Recommended)
 
-1. **Database** — schema, migrations, seed data (movies, halls, seats, refund policies)
+1. **Database** — schema, migrations, seed data (movies, halls, seats, refund policies) 
 2. **Auth** — register, login, JWT guard
 3. **Movies + Screenings** — read endpoints with caching
 4. **Reservations (HTTP)** — reserve, cancel with `SELECT FOR UPDATE`

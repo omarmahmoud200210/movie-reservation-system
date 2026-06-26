@@ -43,6 +43,7 @@ export class OtpService {
       await this.redis.del(key);
       throw new BadRequestException('Too many attempts, request a new code');
     }
+    
     if (stored !== code) return false;
 
     await this.redis.del(key);
