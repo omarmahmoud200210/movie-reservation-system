@@ -133,11 +133,10 @@ export class AuthController {
         role: user.role,
         name: user.name,
       });
-      res.redirect(`${process.env.FRONTEND_URL}/auth/google/callback`);
+      return res.redirect(`${process.env.FRONTEND_URL}/auth/google/callback`);
     } catch (err) {
       if (err instanceof ConflictException) {
-        res.redirect(`${process.env.FRONTEND_URL}/login?error=account_exists`);
-        return;
+        return res.redirect(`${process.env.FRONTEND_URL}/login?error=account_exists`);
       }
       throw err;
     }
@@ -155,10 +154,11 @@ export class AuthController {
   }
 
   /**
-   * Google redirects here after the link flow. The current user is recovered
-   * from the access_token cookie (still sent on this top-level redirect), then
-   * the returned googleId is attached. Redirects back to the frontend settings
-   * page; a googleId already owned elsewhere redirects with an error flag.
+   * Google redirects here after the link flow. The initiating user is taken
+   * from the signed `state` echoed back by Google (CSRF defense — not from an
+   * ambient cookie), then the returned googleId is attached. Redirects back to
+   * the frontend settings page; a googleId already owned elsewhere redirects
+   * with an error flag.
    */
   @Get('link-google/callback')
   @UseGuards(GoogleLinkAuthGuard)
@@ -167,17 +167,16 @@ export class AuthController {
     @Req() req: Request,
     @Res() res: Response,
   ): Promise<void> {
-    const cookies = req.cookies as Record<string, string> | undefined;
-    const { id } = this.tokenService.verifyAccess(cookies?.access_token);
+    const query = req.query as { state?: string };
+    const { id } = this.tokenService.verifyLinkState(query.state);
     try {
       await this.authService.linkGoogle(id, profile.googleId);
-      res.redirect(`${process.env.FRONTEND_URL}/settings?linked=google`);
+      return res.redirect(`${process.env.FRONTEND_URL}/settings?linked=google`);
     } catch (err) {
       if (err instanceof ConflictException) {
-        res.redirect(
+        return res.redirect(
           `${process.env.FRONTEND_URL}/settings?error=google_already_linked`,
         );
-        return;
       }
       throw err;
     }

@@ -88,8 +88,7 @@ model Screening {
   id          Int      @id @default(autoincrement())
   hallId      Int
   movieId     Int
-  screenDate  DateTime
-  screenTime  String
+  startTime   DateTime
   status      ScreenStatus @default(SCHEDULED)
   price       Int
   createdAt   DateTime @default(now())
@@ -100,19 +99,22 @@ model Screening {
   reservations Reservation[]
 
   @@index([movieId])
-  @@index([screenDate])
+  @@index([startTime])
   @@map("screening")
 }
 
 model Seat {
   id          Int       @id @default(autoincrement())
-  hallId      Int
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  hallId      Int      
+  row         String    
+  number      String    
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
-  hall        Hall @relation(fields: [hallId], references: [id],onDelete: Cascade)
+  hall        Hall  @relation(fields: [hallId], references: [id],onDelete: Cascade)
   reservations Reservation[]
 
+  @@unique([hallId,row,number])
   @@map("seat")
 }
 

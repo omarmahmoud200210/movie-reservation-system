@@ -48,7 +48,9 @@ describe('TokenService', () => {
     process.env.JWT_ACCESS_EXPIRES_IN = '15m';
     process.env.JWT_REFRESH_SECRET = 'refresh-secret';
     process.env.JWT_REFRESH_EXPIRES_IN = '7d';
-    process.env.FRONTEND_URL = 'example.com';
+    process.env.FRONTEND_URL = 'http://localhost:5173';
+    process.env.COOKIE_DOMAIN = 'localhost';
+    process.env.LINK_STATE_SECRET = 'link-state-secret';
     process.env.NODE_ENV = 'test';
 
     (randomUUID as jest.Mock).mockReturnValue(FIXED_JTI);
@@ -75,7 +77,7 @@ describe('TokenService', () => {
 
       expect(mockJwt.sign).toHaveBeenNthCalledWith(
         1,
-        { sub: user.id, email: user.email, role: user.role },
+        { sub: user.id, name: user.name, email: user.email, role: user.role },
         { secret: 'access-secret', expiresIn: '15m' },
       );
     });
@@ -162,7 +164,7 @@ describe('TokenService', () => {
         httpOnly: true,
         secure: false,
         sameSite: 'lax',
-        domain: 'example.com',
+        domain: 'localhost',
         maxAge: ACCESS_MAX_AGE_MS,
       });
     });
@@ -174,38 +176,53 @@ describe('TokenService', () => {
         httpOnly: true,
         secure: false,
         sameSite: 'lax',
-        domain: 'example.com',
+        domain: 'localhost',
         path: REFRESH_COOKIE_PATH,
         maxAge: REFRESH_MAX_AGE_MS,
       });
     });
   });
 
-  describe('verifyAccess', () => {
-    it('verifies the access token and returns the user id', () => {
-      mockJwt.verify.mockReturnValue({ sub: user.id, email: user.email });
+  describe('signLinkState', () => {
+    it('signs a short-lived state token bound to the user id', () => {
+      mockJwt.sign.mockReset();
+      mockJwt.sign.mockReturnValue('state-token');
 
-      const result = service.verifyAccess('access-token');
+      const result = service.signLinkState(user.id);
 
-      expect(mockJwt.verify).toHaveBeenCalledWith('access-token', {
-        secret: 'access-secret',
+      expect(mockJwt.sign).toHaveBeenCalledWith(
+        { sub: user.id },
+        { secret: 'link-state-secret', expiresIn: '10m' },
+      );
+      expect(result).toBe('state-token');
+    });
+  });
+
+  describe('verifyLinkState', () => {
+    it('verifies the state token and returns the user id', () => {
+      mockJwt.verify.mockReturnValue({ sub: user.id });
+
+      const result = service.verifyLinkState('state-token');
+
+      expect(mockJwt.verify).toHaveBeenCalledWith('state-token', {
+        secret: 'link-state-secret',
       });
       expect(result).toEqual({ id: user.id });
     });
 
-    it('throws UnauthorizedException when the token is missing', () => {
-      expect(() => service.verifyAccess(undefined)).toThrow(
+    it('throws UnauthorizedException when the state is missing', () => {
+      expect(() => service.verifyLinkState(undefined)).toThrow(
         UnauthorizedException,
       );
       expect(mockJwt.verify).not.toHaveBeenCalled();
     });
 
-    it('throws UnauthorizedException when verification fails', () => {
+    it('throws UnauthorizedException when the state is forged or expired', () => {
       mockJwt.verify.mockImplementation(() => {
         throw new Error('invalid signature');
       });
 
-      expect(() => service.verifyAccess('bad-token')).toThrow(
+      expect(() => service.verifyLinkState('forged')).toThrow(
         UnauthorizedException,
       );
     });

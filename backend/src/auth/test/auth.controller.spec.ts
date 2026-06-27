@@ -20,7 +20,7 @@ const mockTokenService = {
   issueAuthCookies: jest.fn(),
   rotateAuthCookies: jest.fn(),
   clearAuthCookies: jest.fn(),
-  verifyAccess: jest.fn(),
+  verifyLinkState: jest.fn(),
 };
 
 const res = {} as Response;
@@ -180,19 +180,25 @@ describe('AuthController', () => {
       name: user.name,
       googleId: 'google-123',
     };
+
     const req = {
-      cookies: { access_token: 'access-token' },
+      query: { state: 'state-token' },
     } as unknown as import('express').Request;
 
-    it('links the googleId to the current user and redirects to settings', async () => {
+    it('links the googleId to the user bound in the state and redirects to settings', async () => {
       const redirect = jest.fn();
       const redirectRes = { redirect } as unknown as Response;
-      mockTokenService.verifyAccess.mockReturnValue({ id: user.id });
-      mockAuthService.linkGoogle.mockResolvedValue({ ...user, googleId: 'google-123' });
+      mockTokenService.verifyLinkState.mockReturnValue({ id: user.id });
+      mockAuthService.linkGoogle.mockResolvedValue({
+        ...user,
+        googleId: 'google-123',
+      });
 
       await controller.linkGoogleCallback(googleProfile, req, redirectRes);
 
-      expect(mockTokenService.verifyAccess).toHaveBeenCalledWith('access-token');
+      expect(mockTokenService.verifyLinkState).toHaveBeenCalledWith(
+        'state-token',
+      );
       expect(mockAuthService.linkGoogle).toHaveBeenCalledWith(
         user.id,
         'google-123',
@@ -205,7 +211,7 @@ describe('AuthController', () => {
     it('redirects with an error when the googleId is already linked elsewhere', async () => {
       const redirect = jest.fn();
       const redirectRes = { redirect } as unknown as Response;
-      mockTokenService.verifyAccess.mockReturnValue({ id: user.id });
+      mockTokenService.verifyLinkState.mockReturnValue({ id: user.id });
       mockAuthService.linkGoogle.mockRejectedValue(
         new ConflictException('taken'),
       );

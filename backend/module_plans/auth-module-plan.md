@@ -568,3 +568,4 @@ This is a **full-stack application** (separate `frontend/` SPA + this NestJS bac
 - **Repository owns all Prisma calls** — service never touches `prisma` directly.
 - **Rate limiting** (login/OTP brute force) is a separate module later (architecture.md §5); OTP attempt/cooldown counters here are the minimum until then.
 - **Open follow-up:** a `cron` to prune expired Redis keys is unnecessary (TTL handles it); refresh-token server-side revoke-on-logout is deferred per the "clear cookie only" decision.
+

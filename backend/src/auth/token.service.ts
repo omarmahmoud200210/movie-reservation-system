@@ -36,10 +36,13 @@ export class TokenService {
   ) {}
 
   private signAccess(user: AuthUser): string {
-    return this.jwt.sign({ sub: user.id, email: user.email, role: user.role }, {
-      secret: process.env.JWT_ACCESS_SECRET,
-      expiresIn: process.env.JWT_ACCESS_EXPIRES_IN,
-    } as JwtSignOptions);
+    return this.jwt.sign(
+      { sub: user.id, name: user.name, email: user.email, role: user.role },
+      {
+        secret: process.env.JWT_ACCESS_SECRET,
+        expiresIn: process.env.JWT_ACCESS_EXPIRES_IN,
+      } as JwtSignOptions,
+    );
   }
 
   private signRefresh(user: { id: number }): { token: string; jti: string } {
@@ -87,21 +90,30 @@ export class TokenService {
   }
 
   /**
-   * Verify an access token (e.g. from the access_token cookie) and return the
-   * user id. Used by flows that need the current user outside passport's
-   * req.user, such as the Google link callback. Throws 401 if missing/invalid.
+   * Sign a short-lived state token bound to the user initiating a Google link.
+   * Passed as the OAuth `state` param and echoed back by Google, it lets the
+   * callback trust the initiator's id (CSRF defense) instead of an ambient
+   * cookie. See verifyLinkState.
    */
-  verifyAccess(token: string | undefined): { id: number } {
+  signLinkState(userId: number): string {
+    return this.jwt.sign({ sub: userId }, {
+      secret: process.env.LINK_STATE_SECRET,
+      expiresIn: '10m',
+    } as JwtSignOptions);
+  }
+
+  /** Verify a link-state token and return the bound user id. 401 if missing/invalid. */
+  verifyLinkState(token: string | undefined): { id: number } {
     if (!token) {
-      throw new UnauthorizedException('Not authenticated');
+      throw new UnauthorizedException('Missing link state');
     }
     try {
-      const payload = this.jwt.verify<AccessPayload>(token, {
-        secret: process.env.JWT_ACCESS_SECRET,
+      const payload = this.jwt.verify<{ sub: number }>(token, {
+        secret: process.env.LINK_STATE_SECRET,
       });
       return { id: payload.sub };
     } catch {
-      throw new UnauthorizedException('Invalid or expired access token');
+      throw new UnauthorizedException('Invalid or expired link state');
     }
   }
 
@@ -110,7 +122,7 @@ export class TokenService {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax' as const,
-      domain: process.env.FRONTEND_URL,
+      domain: process.env.COOKIE_DOMAIN,
     };
     res.cookie('access_token', access, { ...base, maxAge: ACCESS_MAX_AGE_MS });
     res.cookie('refresh_token', refresh, {

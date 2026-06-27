@@ -526,3 +526,7 @@ src/
 10. **Observability** — Prometheus metrics, Grafana dashboards
 11. **Load Testing** — Artillery scenarios, tune under Grafana observation
 12. **Security hardening** — HTTPS, input validation, JWT in cookies
+
+
+## Notes for later
+- **TODO (e2e tests for OAuth guards):** controller unit tests call methods directly and bypass the guard pipeline, so guard logic (`GoogleLinkAuthGuard.getAuthenticateOptions`, redirect legs) has no automated coverage. Add e2e tests (supertest) for `/auth/google/callback` and `/auth/link-google/callback` with the Google strategy stubbed — these are the only tests that exercise `canActivate`/`getAuthenticateOptions`. Motivating bug: `getAuthenticateOptions` runs on *both* the initiation and callback legs; on the callback `req.user` is undefined (no `JwtAuthGuard` there), so an unguarded `user!.id` threw a runtime `TypeError` that every unit test passed straight through.
