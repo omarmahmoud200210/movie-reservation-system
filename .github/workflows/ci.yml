@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: backend
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: movie_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+
+      redis_cache:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+
+      redis_pubsub:
+        image: redis:7
+        ports: ['6380:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s --health-timeout 5s --health-retries 5
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/movie_test
+
+      REDIS_CACHE_HOST: localhost
+      REDIS_CACHE_PORT: '6379'
+      REDIS_PUBSUB_HOST: localhost
+      REDIS_PUBSUB_PORT: '6380'
+
+      # JWT / auth — secrets stored in repo settings
+      JWT_ACCESS_SECRET: ${{ secrets.JWT_ACCESS_SECRET }}
+      JWT_ACCESS_EXPIRES_IN: 15m
+      JWT_REFRESH_SECRET: ${{ secrets.JWT_REFRESH_SECRET }}
+      JWT_REFRESH_EXPIRES_IN: 7d
+      LINK_STATE_SECRET: ${{ secrets.LINK_STATE_SECRET }}
+      COOKIE_DOMAIN: localhost
+
+      # OTP
+      OTP_TTL_SECONDS: '300'
+      OTP_RESEND_COOLDOWN_SECONDS: '60'
+      OTP_MAX_ATTEMPTS: '5'
+
+      # Mailer
+      MAIL_HOST: localhost
+      MAIL_PORT: '1025'
+      MAIL_USER: ${{ secrets.MAIL_USER }}
+      MAIL_PASS: ${{ secrets.MAIL_PASS }}
+      MAIL_FROM: no-reply@example.com
+
+      # Google OAuth
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      GOOGLE_CALLBACK_URL: http://localhost:3000/auth/google/callback
+      GOOGLE_LINK_CALLBACK_URL: http://localhost:3000/auth/google/link/callback
+
+      FRONTEND_URL: http://localhost:5173
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npx prisma generate
+      - run: npx tsc --noEmit
+      - run: npx prisma migrate deploy # applies migrations to test DB
+      - run: npm run test
