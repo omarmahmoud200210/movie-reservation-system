@@ -1,0 +1,91 @@
+import { CreateMovieDto } from './dto/create-movie.dto';
+import { UpdateMovieDto } from './dto/update-movie.dto';
+import { MoviesService } from './movies.service';
+export declare class MoviesAdminController {
+    private readonly moviesService;
+    constructor(moviesService: MoviesService);
+    create(dto: CreateMovieDto): Promise<{
+        name: string;
+        id: number;
+        createdAt: Date;
+        updatedAt: Date;
+        status: import("@prisma/client").$Enums.MovieStatus;
+        description: string;
+        duration: number;
+        posterImgUrl: string;
+        movieType: string;
+        rating: number;
+        language: string;
+        genre: string;
+    }>;
+    update(id: number, dto: UpdateMovieDto): Promise<{
+        name: string;
+        id: number;
+        createdAt: Date;
+        updatedAt: Date;
+        status: import("@prisma/client").$Enums.MovieStatus;
+        description: string;
+        duration: number;
+        posterImgUrl: string;
+        movieType: string;
+        rating: number;
+        language: string;
+        genre: string;
+    }>;
+    publish(id: number): Promise<{
+        name: string;
+        id: number;
+        createdAt: Date;
+        updatedAt: Date;
+        status: import("@prisma/client").$Enums.MovieStatus;
+        description: string;
+        duration: number;
+        posterImgUrl: string;
+        movieType: string;
+        rating: number;
+        language: string;
+        genre: string;
+    }>;
+    unpublish(id: number): Promise<{
+        name: string;
+        id: number;
+        createdAt: Date;
+        updatedAt: Date;
+        status: import("@prisma/client").$Enums.MovieStatus;
+        description: string;
+        duration: number;
+        posterImgUrl: string;
+        movieType: string;
+        rating: number;
+        language: string;
+        genre: string;
+    }>;
+    remove(id: number): Promise<{
+        name: string;
+        id: number;
+        createdAt: Date;
+        updatedAt: Date;
+        status: import("@prisma/client").$Enums.MovieStatus;
+        description: string;
+        duration: number;
+        posterImgUrl: string;
+        movieType: string;
+        rating: number;
+        language: string;
+        genre: string;
+    }>;
+    listAll(): Promise<{
+        name: string;
+        id: number;
+        createdAt: Date;
+        updatedAt: Date;
+        status: import("@prisma/client").$Enums.MovieStatus;
+        description: string;
+        duration: number;
+        posterImgUrl: string;
+        movieType: string;
+        rating: number;
+        language: string;
+        genre: string;
+    }[]>;
+}

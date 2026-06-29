@@ -8,10 +8,27 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ScreeningsModule = void 0;
 const common_1 = require("@nestjs/common");
+const movies_module_1 = require("../movies/movies.module");
+const halls_admin_controller_1 = require("./halls-admin.controller");
+const halls_service_1 = require("./halls.service");
+const halls_repository_1 = require("./halls.repository");
+const screenings_admin_controller_1 = require("./screenings-admin.controller");
+const screenings_service_1 = require("./screenings.service");
+const screenings_repository_1 = require("./screenings.repository");
 let ScreeningsModule = class ScreeningsModule {
 };
 exports.ScreeningsModule = ScreeningsModule;
 exports.ScreeningsModule = ScreeningsModule = __decorate([
-    (0, common_1.Module)({})
+    (0, common_1.Module)({
+        imports: [movies_module_1.MoviesModule],
+        controllers: [halls_admin_controller_1.HallsAdminController, screenings_admin_controller_1.ScreeningsAdminController],
+        providers: [
+            halls_service_1.HallsService,
+            halls_repository_1.HallsRepository,
+            screenings_service_1.ScreeningsService,
+            screenings_repository_1.ScreeningsRepository,
+        ],
+        exports: [halls_service_1.HallsService, halls_repository_1.HallsRepository, screenings_service_1.ScreeningsService, screenings_repository_1.ScreeningsRepository],
+    })
 ], ScreeningsModule);
 //# sourceMappingURL=screenings.module.js.map
