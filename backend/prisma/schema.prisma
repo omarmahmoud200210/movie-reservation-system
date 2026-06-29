@@ -36,6 +36,11 @@ enum PaymentStatus {
   REFUNDED
 }
 
+enum MovieStatus {
+  DRAFT
+  PUBLISHED
+}
+
 model User {
   id                Int      @id @default(autoincrement())
   name              String
@@ -62,6 +67,7 @@ model Movie {
   rating       Float
   language     String
   genre        String
+  status       MovieStatus @default(DRAFT)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -115,6 +121,7 @@ model Seat {
   reservations Reservation[]
 
   @@unique([hallId,row,number])
+  @@index([hallId])
   @@map("seat")
 }
 

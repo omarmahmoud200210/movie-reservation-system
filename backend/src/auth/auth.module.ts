@@ -14,7 +14,7 @@ import { GoogleLinkStrategy } from './strategies/google-link.strategy';
 import { MailerModule } from '../mailer/mailer.module';
 
 @Module({
-  imports: [AuthService, MailerModule, PassportModule, JwtModule.register({})],
+  imports: [MailerModule, PassportModule, JwtModule.register({})],
   controllers: [AuthController],
   providers: [
     AuthService,
