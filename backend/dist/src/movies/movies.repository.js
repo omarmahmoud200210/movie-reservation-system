@@ -11,6 +11,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MoviesRepository = void 0;
 const common_1 = require("@nestjs/common");
+const client_1 = require("@prisma/client");
 const prisma_service_1 = require("../prisma/prisma.service");
 let MoviesRepository = class MoviesRepository {
     prisma;
@@ -34,6 +35,24 @@ let MoviesRepository = class MoviesRepository {
     }
     listAll() {
         return this.prisma.movie.findMany({ orderBy: { createdAt: 'desc' } });
+    }
+    findPublishedById(id) {
+        return this.prisma.movie.findFirst({
+            where: { id, status: client_1.MovieStatus.PUBLISHED },
+        });
+    }
+    findPublishedForBrowse(now) {
+        return this.prisma.movie.findMany({
+            where: { status: client_1.MovieStatus.PUBLISHED },
+            include: {
+                screens: {
+                    where: { status: client_1.ScreenStatus.SCHEDULED, startTime: { gt: now } },
+                    select: { id: true },
+                    take: 1,
+                },
+            },
+            orderBy: { createdAt: 'desc' },
+        });
     }
     async hasReservations(movieId) {
         const reservations = await this.prisma.reservation.findFirst({

@@ -13,41 +13,86 @@ exports.MoviesService = void 0;
 const common_1 = require("@nestjs/common");
 const client_1 = require("@prisma/client");
 const movies_repository_1 = require("./movies.repository");
+const movies_cache_1 = require("./movies.cache");
 let MoviesService = class MoviesService {
     moviesRepo;
-    constructor(moviesRepo) {
+    moviesCache;
+    constructor(moviesRepo, moviesCache) {
         this.moviesRepo = moviesRepo;
+        this.moviesCache = moviesCache;
     }
     createMovie(dto) {
         return this.moviesRepo.create(dto);
     }
     async updateMovie(id, dto) {
         await this.getExisting(id);
-        return this.moviesRepo.update(id, dto);
+        const movie = await this.moviesRepo.update(id, dto);
+        await this.moviesCache.delMovie(id);
+        return movie;
     }
     async publish(id) {
         const movie = await this.getExisting(id);
         if (movie.status === client_1.MovieStatus.PUBLISHED) {
             throw new common_1.BadRequestException('Movie is already published');
         }
-        return this.moviesRepo.setStatus(id, client_1.MovieStatus.PUBLISHED);
+        const published = await this.moviesRepo.setStatus(id, client_1.MovieStatus.PUBLISHED);
+        await this.moviesCache.delLists();
+        return published;
     }
     async unpublish(id) {
         const movie = await this.getExisting(id);
         if (movie.status === client_1.MovieStatus.DRAFT) {
             throw new common_1.BadRequestException('Movie is already a draft');
         }
-        return this.moviesRepo.setStatus(id, client_1.MovieStatus.DRAFT);
+        const draft = await this.moviesRepo.setStatus(id, client_1.MovieStatus.DRAFT);
+        await this.moviesCache.delMovie(id);
+        await this.moviesCache.delLists();
+        return draft;
     }
     async deleteMovie(id) {
         await this.getExisting(id);
         if (await this.moviesRepo.hasReservations(id)) {
             throw new common_1.ConflictException('Cannot delete a movie with existing reservations; unpublish it instead');
         }
-        return this.moviesRepo.delete(id);
+        const deleted = await this.moviesRepo.delete(id);
+        await this.moviesCache.delMovie(id);
+        await this.moviesCache.delLists();
+        return deleted;
     }
     listAllForAdmin() {
         return this.moviesRepo.listAll();
+    }
+    async browseMovies() {
+        const cached = await this.moviesCache.getLists();
+        if (cached) {
+            return cached;
+        }
+        const movies = await this.moviesRepo.findPublishedForBrowse(new Date());
+        const nowShowing = [];
+        const comingSoon = [];
+        for (const { screens, ...movie } of movies) {
+            if (screens.length > 0) {
+                nowShowing.push(movie);
+            }
+            else {
+                comingSoon.push(movie);
+            }
+        }
+        const lists = { nowShowing, comingSoon };
+        await this.moviesCache.setLists(lists);
+        return lists;
+    }
+    async getPublishedMovie(id) {
+        const cached = await this.moviesCache.getMovie(id);
+        if (cached) {
+            return cached;
+        }
+        const movie = await this.moviesRepo.findPublishedById(id);
+        if (!movie) {
+            throw new common_1.NotFoundException(`Movie ${id} not found`);
+        }
+        await this.moviesCache.setMovie(movie);
+        return movie;
     }
     async getExisting(id) {
         const movie = await this.moviesRepo.findById(id);
@@ -60,6 +105,7 @@ let MoviesService = class MoviesService {
 exports.MoviesService = MoviesService;
 exports.MoviesService = MoviesService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [movies_repository_1.MoviesRepository])
+    __metadata("design:paramtypes", [movies_repository_1.MoviesRepository,
+        movies_cache_1.MoviesCache])
 ], MoviesService);
 //# sourceMappingURL=movies.service.js.map

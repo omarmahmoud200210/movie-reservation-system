@@ -7,6 +7,7 @@ import {
 import { MovieStatus } from '@prisma/client';
 import { MoviesService } from '../movies.service';
 import { MoviesRepository } from '../movies.repository';
+import { MoviesCache } from '../movies.cache';
 
 const mockRepo = {
   create: jest.fn(),
@@ -16,6 +17,17 @@ const mockRepo = {
   delete: jest.fn(),
   listAll: jest.fn(),
   hasReservations: jest.fn(),
+  findPublishedById: jest.fn(),
+  findPublishedForBrowse: jest.fn(),
+};
+
+const mockCache = {
+  getMovie: jest.fn(),
+  setMovie: jest.fn(),
+  delMovie: jest.fn(),
+  getLists: jest.fn(),
+  setLists: jest.fn(),
+  delLists: jest.fn(),
 };
 
 const createDto = {
@@ -42,6 +54,7 @@ describe('MoviesService', () => {
       providers: [
         MoviesService,
         { provide: MoviesRepository, useValue: mockRepo },
+        { provide: MoviesCache, useValue: mockCache },
       ],
     }).compile();
 
@@ -179,6 +192,179 @@ describe('MoviesService', () => {
 
       await expect(service.listAllForAdmin()).resolves.toBe(movies);
       expect(mockRepo.listAll).toHaveBeenCalled();
+    });
+  });
+
+  describe('browseMovies', () => {
+    // Repo returns published movies each tagged with a `screens` marker:
+    // non-empty => has a future scheduled screening.
+    const withScreens = { ...publishedMovie, id: 1, screens: [{ id: 10 }] };
+    const noScreens = { ...publishedMovie, id: 2, screens: [] };
+
+    it('puts a movie with a future scheduled screening in nowShowing', async () => {
+      mockRepo.findPublishedForBrowse.mockResolvedValue([withScreens]);
+
+      const result = await service.browseMovies();
+
+      expect(result.nowShowing.map((m) => m.id)).toEqual([1]);
+      expect(result.comingSoon).toEqual([]);
+    });
+
+    it('puts a published movie with no future screening in comingSoon (not dropped)', async () => {
+      mockRepo.findPublishedForBrowse.mockResolvedValue([noScreens]);
+
+      const result = await service.browseMovies();
+
+      expect(result.comingSoon.map((m) => m.id)).toEqual([2]);
+      expect(result.nowShowing).toEqual([]);
+    });
+
+    it('splits a mixed set into both buckets', async () => {
+      mockRepo.findPublishedForBrowse.mockResolvedValue([withScreens, noScreens]);
+
+      const result = await service.browseMovies();
+
+      expect(result.nowShowing.map((m) => m.id)).toEqual([1]);
+      expect(result.comingSoon.map((m) => m.id)).toEqual([2]);
+    });
+
+    it('strips the screens marker from the returned movies', async () => {
+      mockRepo.findPublishedForBrowse.mockResolvedValue([withScreens, noScreens]);
+
+      const result = await service.browseMovies();
+
+      [...result.nowShowing, ...result.comingSoon].forEach((m) => {
+        expect(m).not.toHaveProperty('screens');
+      });
+    });
+
+    it('returns empty buckets when there are no published movies', async () => {
+      mockRepo.findPublishedForBrowse.mockResolvedValue([]);
+
+      await expect(service.browseMovies()).resolves.toEqual({
+        nowShowing: [],
+        comingSoon: [],
+      });
+    });
+
+    it('passes a Date (now) to the repository', async () => {
+      mockRepo.findPublishedForBrowse.mockResolvedValue([]);
+
+      await service.browseMovies();
+
+      const arg = mockRepo.findPublishedForBrowse.mock.calls[0][0];
+      expect(arg).toBeInstanceOf(Date);
+    });
+  });
+
+  describe('getPublishedMovie', () => {
+    it('returns the movie when it is published', async () => {
+      mockRepo.findPublishedById.mockResolvedValue(publishedMovie);
+
+      await expect(service.getPublishedMovie(1)).resolves.toBe(publishedMovie);
+    });
+
+    it('throws 404 when the movie is a draft or unknown', async () => {
+      mockRepo.findPublishedById.mockResolvedValue(null);
+
+      await expect(service.getPublishedMovie(99)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe('caching', () => {
+    describe('browseMovies (cache-aside)', () => {
+      it('serves from cache on a hit without querying the repo', async () => {
+        const lists = { nowShowing: [publishedMovie], comingSoon: [] };
+        mockCache.getLists.mockResolvedValue(lists);
+
+        await expect(service.browseMovies()).resolves.toBe(lists);
+        expect(mockRepo.findPublishedForBrowse).not.toHaveBeenCalled();
+      });
+
+      it('populates the cache on a miss', async () => {
+        mockCache.getLists.mockResolvedValue(null);
+        mockRepo.findPublishedForBrowse.mockResolvedValue([]);
+
+        await service.browseMovies();
+
+        expect(mockCache.setLists).toHaveBeenCalledWith({
+          nowShowing: [],
+          comingSoon: [],
+        });
+      });
+    });
+
+    describe('getPublishedMovie (cache-aside)', () => {
+      it('serves from cache on a hit without querying the repo', async () => {
+        mockCache.getMovie.mockResolvedValue(publishedMovie);
+
+        await expect(service.getPublishedMovie(1)).resolves.toBe(
+          publishedMovie,
+        );
+        expect(mockRepo.findPublishedById).not.toHaveBeenCalled();
+      });
+
+      it('populates the cache on a miss', async () => {
+        mockCache.getMovie.mockResolvedValue(null);
+        mockRepo.findPublishedById.mockResolvedValue(publishedMovie);
+
+        await service.getPublishedMovie(1);
+
+        expect(mockCache.setMovie).toHaveBeenCalledWith(publishedMovie);
+      });
+    });
+
+    describe('write invalidation', () => {
+      it('updateMovie clears movie:{id}', async () => {
+        mockRepo.findById.mockResolvedValue(draftMovie);
+        mockRepo.update.mockResolvedValue(draftMovie);
+
+        await service.updateMovie(1, { name: 'x' });
+
+        expect(mockCache.delMovie).toHaveBeenCalledWith(1);
+        expect(mockCache.delLists).not.toHaveBeenCalled();
+      });
+
+      it('publish clears the browse lists', async () => {
+        mockRepo.findById.mockResolvedValue(draftMovie);
+        mockRepo.setStatus.mockResolvedValue(publishedMovie);
+
+        await service.publish(1);
+
+        expect(mockCache.delLists).toHaveBeenCalled();
+      });
+
+      it('unpublish clears movie:{id} and the browse lists', async () => {
+        mockRepo.findById.mockResolvedValue(publishedMovie);
+        mockRepo.setStatus.mockResolvedValue(draftMovie);
+
+        await service.unpublish(1);
+
+        expect(mockCache.delMovie).toHaveBeenCalledWith(1);
+        expect(mockCache.delLists).toHaveBeenCalled();
+      });
+
+      it('deleteMovie clears movie:{id} and the browse lists', async () => {
+        mockRepo.findById.mockResolvedValue(draftMovie);
+        mockRepo.hasReservations.mockResolvedValue(false);
+        mockRepo.delete.mockResolvedValue(draftMovie);
+
+        await service.deleteMovie(1);
+
+        expect(mockCache.delMovie).toHaveBeenCalledWith(1);
+        expect(mockCache.delLists).toHaveBeenCalled();
+      });
+
+      it('createMovie touches no cache (drafts are invisible)', async () => {
+        mockRepo.create.mockResolvedValue(draftMovie);
+
+        await service.createMovie(createDto);
+
+        expect(mockCache.delMovie).not.toHaveBeenCalled();
+        expect(mockCache.delLists).not.toHaveBeenCalled();
+      });
     });
   });
 });

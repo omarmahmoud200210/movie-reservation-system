@@ -60,6 +60,39 @@ let ScreeningsRepository = class ScreeningsRepository {
             return sStart < endMs && sEnd > startMs;
         });
     }
+    findFutureScheduledByMovie(movieId, now) {
+        return this.prisma.screening.findMany({
+            where: {
+                movieId,
+                status: client_1.ScreenStatus.SCHEDULED,
+                startTime: { gt: now },
+            },
+            select: {
+                id: true,
+                startTime: true,
+                price: true,
+                hall: { select: { id: true, name: true, capacity: true } },
+            },
+            orderBy: { startTime: 'asc' },
+        });
+    }
+    findSeatsByHall(hallId) {
+        return this.prisma.seat.findMany({
+            where: { hallId },
+            orderBy: [{ row: 'asc' }, { id: 'asc' }],
+        });
+    }
+    findActiveReservations(screeningId) {
+        return this.prisma.reservation.findMany({
+            where: {
+                screeningId,
+                status: {
+                    in: [client_1.ReservationStatus.HELD, client_1.ReservationStatus.CONFIRMED],
+                },
+            },
+            select: { seatId: true, status: true },
+        });
+    }
 };
 exports.ScreeningsRepository = ScreeningsRepository;
 exports.ScreeningsRepository = ScreeningsRepository = __decorate([

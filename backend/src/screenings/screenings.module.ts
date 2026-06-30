@@ -3,9 +3,11 @@ import { MoviesModule } from '../movies/movies.module';
 import { HallsAdminController } from './halls-admin.controller';
 import { HallsService } from './halls.service';
 import { HallsRepository } from './halls.repository';
+import { ScreeningsController } from './screenings.controller';
 import { ScreeningsAdminController } from './screenings-admin.controller';
 import { ScreeningsService } from './screenings.service';
 import { ScreeningsRepository } from './screenings.repository';
+import { ScreeningsCache } from './screenings.cache';
 
 /**
  * Screenings + halls module — admin scheduling with hall-overlap protection
@@ -15,12 +17,17 @@ import { ScreeningsRepository } from './screenings.repository';
  */
 @Module({
   imports: [MoviesModule],
-  controllers: [HallsAdminController, ScreeningsAdminController],
+  controllers: [
+    HallsAdminController,
+    ScreeningsAdminController,
+    ScreeningsController,
+  ],
   providers: [
     HallsService,
     HallsRepository,
     ScreeningsService,
     ScreeningsRepository,
+    ScreeningsCache,
   ],
   exports: [HallsService, HallsRepository, ScreeningsService, ScreeningsRepository],
 })

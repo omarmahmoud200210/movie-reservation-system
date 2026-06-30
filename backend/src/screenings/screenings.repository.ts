@@ -1,5 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma, Screening, ScreenStatus } from '@prisma/client';
+import {
+  Prisma,
+  ReservationStatus,
+  Screening,
+  ScreenStatus,
+  Seat,
+} from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 export type ScreeningWithMovieHall = Prisma.ScreeningGetPayload<{
@@ -77,6 +83,53 @@ export class ScreeningsRepository {
       const sEnd = sStart + s.movie.duration * 60_000;
       // Half-open intervals overlap iff each starts before the other ends.
       return sStart < endMs && sEnd > startMs;
+    });
+  }
+
+  /**
+   * Future SCHEDULED screenings of a movie, with their hall, for the
+   * selection UI. Ordered by start time.
+   */
+  findFutureScheduledByMovie(movieId: number, now: Date) {
+    return this.prisma.screening.findMany({
+      where: {
+        movieId,
+        status: ScreenStatus.SCHEDULED,
+        startTime: { gt: now },
+      },
+      select: {
+        id: true,
+        startTime: true,
+        price: true,
+        hall: { select: { id: true, name: true, capacity: true } },
+      },
+      orderBy: { startTime: 'asc' },
+    });
+  }
+
+  /** Every seat of a hall, ordered for a stable seat-map layout. */
+  findSeatsByHall(hallId: number): Promise<Seat[]> {
+    return this.prisma.seat.findMany({
+      where: { hallId },
+      orderBy: [{ row: 'asc' }, { id: 'asc' }],
+    });
+  }
+
+  /**
+   * Active (HELD / CONFIRMED) reservations for a screening, keyed by seat.
+   * CANCELLED reservations are excluded so their seats read as AVAILABLE.
+   */
+  findActiveReservations(
+    screeningId: number,
+  ): Promise<{ seatId: number; status: ReservationStatus }[]> {
+    return this.prisma.reservation.findMany({
+      where: {
+        screeningId,
+        status: {
+          in: [ReservationStatus.HELD, ReservationStatus.CONFIRMED],
+        },
+      },
+      select: { seatId: true, status: true },
     });
   }
 }

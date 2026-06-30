@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { MovieStatus } from '@prisma/client';
+import { MovieStatus, ScreenStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { MoviesRepository } from '../movies.repository';
 
@@ -8,6 +8,7 @@ const mockPrisma = {
     create: jest.fn(),
     update: jest.fn(),
     findUnique: jest.fn(),
+    findFirst: jest.fn(),
     delete: jest.fn(),
     findMany: jest.fn(),
   },
@@ -107,6 +108,37 @@ describe('MoviesRepository', () => {
       mockPrisma.reservation.findFirst.mockResolvedValue(null);
 
       await expect(repo.hasReservations(1)).resolves.toBe(false);
+    });
+  });
+
+  it('findPublishedById -> findFirst by id + PUBLISHED status', async () => {
+    mockPrisma.movie.findFirst.mockResolvedValue({ id: 1 });
+
+    await repo.findPublishedById(1);
+
+    expect(mockPrisma.movie.findFirst).toHaveBeenCalledWith({
+      where: { id: 1, status: MovieStatus.PUBLISHED },
+    });
+  });
+
+  describe('findPublishedForBrowse', () => {
+    it('filters movies by PUBLISHED only, with the future-screening filter inside include', async () => {
+      const now = new Date('2026-07-01T00:00:00.000Z');
+      mockPrisma.movie.findMany.mockResolvedValue([]);
+
+      await repo.findPublishedForBrowse(now);
+
+      expect(mockPrisma.movie.findMany).toHaveBeenCalledWith({
+        where: { status: MovieStatus.PUBLISHED },
+        include: {
+          screens: {
+            where: { status: ScreenStatus.SCHEDULED, startTime: { gt: now } },
+            select: { id: true },
+            take: 1,
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
     });
   });
 });

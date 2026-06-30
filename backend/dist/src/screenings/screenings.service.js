@@ -13,16 +13,22 @@ exports.ScreeningsService = void 0;
 const common_1 = require("@nestjs/common");
 const client_1 = require("@prisma/client");
 const movies_repository_1 = require("../movies/movies.repository");
+const movies_cache_1 = require("../movies/movies.cache");
 const halls_repository_1 = require("./halls.repository");
 const screenings_repository_1 = require("./screenings.repository");
+const screenings_cache_1 = require("./screenings.cache");
 let ScreeningsService = class ScreeningsService {
     screeningsRepo;
     moviesRepo;
     hallsRepo;
-    constructor(screeningsRepo, moviesRepo, hallsRepo) {
+    screeningsCache;
+    moviesCache;
+    constructor(screeningsRepo, moviesRepo, hallsRepo, screeningsCache, moviesCache) {
         this.screeningsRepo = screeningsRepo;
         this.moviesRepo = moviesRepo;
         this.hallsRepo = hallsRepo;
+        this.screeningsCache = screeningsCache;
+        this.moviesCache = moviesCache;
     }
     async createScreening(dto) {
         const movie = await this.moviesRepo.findById(dto.movieId);
@@ -36,12 +42,14 @@ let ScreeningsService = class ScreeningsService {
         const start = new Date(dto.startTime);
         const end = this.computeEnd(start, movie.duration);
         await this.assertNoOverlap(dto.hallId, start, end);
-        return this.screeningsRepo.create({
+        const screening = await this.screeningsRepo.create({
             movieId: dto.movieId,
             hallId: dto.hallId,
             startTime: start,
             price: dto.price,
         });
+        await this.moviesCache.delLists();
+        return screening;
     }
     async updateScreening(id, dto) {
         const existing = await this.getExisting(id);
@@ -79,14 +87,68 @@ let ScreeningsService = class ScreeningsService {
         if (existing.status === client_1.ScreenStatus.CANCELLED) {
             throw new common_1.BadRequestException('Screening is already cancelled');
         }
-        return this.screeningsRepo.setStatus(id, client_1.ScreenStatus.CANCELLED);
+        const cancelled = await this.screeningsRepo.setStatus(id, client_1.ScreenStatus.CANCELLED);
+        await this.moviesCache.delLists();
+        await this.screeningsCache.delSeatMap(id);
+        return cancelled;
     }
     async deleteScreening(id) {
         await this.getExisting(id);
         if (await this.screeningsRepo.hasReservations(id)) {
             throw new common_1.ConflictException('Cannot delete a screening with existing reservations; cancel it instead');
         }
-        return this.screeningsRepo.delete(id);
+        const deleted = await this.screeningsRepo.delete(id);
+        await this.moviesCache.delLists();
+        await this.screeningsCache.delSeatMap(id);
+        return deleted;
+    }
+    async getScreeningDetail(id) {
+        const screening = await this.screeningsRepo.findById(id);
+        if (!screening || screening.status === client_1.ScreenStatus.CANCELLED) {
+            throw new common_1.NotFoundException(`Screening ${id} not found`);
+        }
+        return screening;
+    }
+    async getMovieScreenings(movieId) {
+        const movie = await this.moviesRepo.findPublishedById(movieId);
+        if (!movie) {
+            throw new common_1.NotFoundException(`Movie ${movieId} not found`);
+        }
+        return this.screeningsRepo.findFutureScheduledByMovie(movieId, new Date());
+    }
+    async getSeatMap(screeningId) {
+        const cached = await this.screeningsCache.getSeatMap(screeningId);
+        if (cached) {
+            return cached;
+        }
+        const screening = await this.screeningsRepo.findById(screeningId);
+        if (!screening || screening.status === client_1.ScreenStatus.CANCELLED) {
+            throw new common_1.NotFoundException(`Screening ${screeningId} not found`);
+        }
+        const [seats, reservations] = await Promise.all([
+            this.screeningsRepo.findSeatsByHall(screening.hallId),
+            this.screeningsRepo.findActiveReservations(screeningId),
+        ]);
+        const statusBySeat = new Map();
+        for (const r of reservations) {
+            statusBySeat.set(r.seatId, r.status);
+        }
+        const seatMap = seats.map((seat) => ({
+            seatId: seat.id,
+            row: seat.row,
+            number: seat.number,
+            status: this.toSeatStatus(statusBySeat.get(seat.id)),
+        }));
+        await this.screeningsCache.setSeatMap(screeningId, seatMap);
+        return seatMap;
+    }
+    toSeatStatus(reservationStatus) {
+        if (reservationStatus === client_1.ReservationStatus.HELD)
+            return client_1.SeatStatus.HELD;
+        if (reservationStatus === client_1.ReservationStatus.CONFIRMED) {
+            return client_1.SeatStatus.BOOKED;
+        }
+        return client_1.SeatStatus.AVAILABLE;
     }
     async assertNoOverlap(hallId, start, end, excludeId) {
         const overlapping = await this.screeningsRepo.findOverlapping(hallId, start, end, excludeId);
@@ -110,6 +172,8 @@ exports.ScreeningsService = ScreeningsService = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [screenings_repository_1.ScreeningsRepository,
         movies_repository_1.MoviesRepository,
-        halls_repository_1.HallsRepository])
+        halls_repository_1.HallsRepository,
+        screenings_cache_1.ScreeningsCache,
+        movies_cache_1.MoviesCache])
 ], ScreeningsService);
 //# sourceMappingURL=screenings.service.js.map
