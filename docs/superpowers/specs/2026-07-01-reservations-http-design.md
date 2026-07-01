@@ -179,6 +179,28 @@ Hand-written SQL migration (Prisma schema can't express a partial `WHERE`
 index) creating `reservation_active_seat_screening_key` as above. Applied via
 `prisma migrate`; the index is not represented in `schema.prisma`.
 
+## Deferred-integration markers (in code)
+
+Every seam where a later build-order phase will plug in gets a **comment
+placeholder at the exact spot**, not a silent gap — so the later phase has an
+obvious anchor. Convention: a single greppable marker line
+
+```
+// DEFERRED(phase-N): <what plugs in here>
+```
+
+Planned placements:
+
+| Seam | Where the comment goes | Phase |
+|---|---|---|
+| WebSocket broadcast | in `listeners/` next to the cache listener (broadcast listener will subscribe to the same `reservation.*` events) | 5 |
+| Cron hold-expiry | at the `heldUntil = now + 10min` assignment (notes the cron job that consumes it) | 6 |
+| Rate limiting | above `POST /reservations` in the controller | 8 |
+| `HELD → CONFIRMED` confirm | in the service near status handling | 9 |
+| Refund-aware cancel of `CONFIRMED` | in the cancel path where it currently rejects non-`HELD` | 9 |
+
+No stub classes or dead code — comments only, so nothing ships unused.
+
 ## Follow-ups noted for later phases
 
 - Phase 5: WebSocket listener on `reservation.created`/`cancelled` → broadcast.
