@@ -29,6 +29,12 @@ import { ScreeningsCache } from './screenings.cache';
     ScreeningsRepository,
     ScreeningsCache,
   ],
-  exports: [HallsService, HallsRepository, ScreeningsService, ScreeningsRepository],
+  exports: [
+    HallsService,
+    HallsRepository,
+    ScreeningsService,
+    ScreeningsRepository,
+    ScreeningsCache,
+  ],
 })
 export class ScreeningsModule {}
