@@ -12,8 +12,9 @@ import {
  * cancel both fire `reservation.*`; this drops the cached map so the next
  * seat-map read recomputes from the DB.
  *
- * DEFERRED(phase-5): the WebSocket broadcast listener subscribes to these same
- * events to push `seat:reserved` / `seat:cancelled` to the screening room.
+ * A second listener, `ReservationBroadcastListener` (src/gateway/), subscribes
+ * to the same events to push `seat:reserved` / `seat:cancelled` to the
+ * screening's WebSocket room.
  */
 @Injectable()
 export class ReservationCacheListener {
