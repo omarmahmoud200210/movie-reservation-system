@@ -21,7 +21,7 @@ describe('ReservationCacheListener', () => {
   });
 
   it('invalidates the seat map for the payload screening', async () => {
-    await listener.invalidateSeatMap({ screeningId: 42 });
+    await listener.invalidateSeatMap({ screeningId: 42, seatIds: [1, 2] });
 
     expect(mockScreeningsCache.delSeatMap).toHaveBeenCalledWith(42);
   });
