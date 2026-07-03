@@ -54,7 +54,10 @@ export class ReservationsService {
       heldUntil,
     });
 
-    this.events.emit(RESERVATION_CREATED, { screeningId: dto.screeningId });
+    this.events.emit(RESERVATION_CREATED, {
+      screeningId: dto.screeningId,
+      seatIds: reservations.map((r) => r.seatId),
+    });
     return reservations;
   }
 

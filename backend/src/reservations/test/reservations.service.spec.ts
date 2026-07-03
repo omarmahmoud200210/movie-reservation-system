@@ -86,14 +86,18 @@ describe('ReservationsService', () => {
       );
     });
 
-    it('emits reservation.created with the screening id after a successful hold', async () => {
+    it('emits reservation.created with the screening id and held seat ids', async () => {
       mockScreeningsRepo.findById.mockResolvedValue(screening);
-      mockReservationsRepo.holdSeats.mockResolvedValue([{ id: 100 }]);
+      mockReservationsRepo.holdSeats.mockResolvedValue([
+        { id: 100, seatId: 11 },
+        { id: 101, seatId: 12 },
+      ]);
 
       await service.reserve(7, dto);
 
       expect(mockEvents.emit).toHaveBeenCalledWith(RESERVATION_CREATED, {
         screeningId: 3,
+        seatIds: [11, 12],
       });
     });
 
