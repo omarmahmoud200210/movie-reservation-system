@@ -10,15 +10,15 @@ Push live seat-status changes and derived screening counts to **every visitor**
 watching a screening — logged in or not — so the seat map and its summary
 (held / booked / seats-left) update the instant someone reserves or cancels.
 
-The real-time layer is public: it serves anonymous browsers exactly like
-authenticated ones. Auth, when present, only *enriches* a socket with an
-identity for a later phase; it never gates access.
+The real-time layer is public and **read-only**: it broadcasts state, it does
+not accept user actions. The only mutating action, reserve/cancel, happens over
+the HTTP API, which is already authenticated there. So this phase has **no WS
+authentication** — there is nothing on the socket to authorize.
 
 ## Scope
 
 **In:**
 - A Socket.io `@WebSocketGateway` with room-per-screening (`screening:{id}`).
-- Optional-auth identity attachment on connect (httpOnly `access_token` cookie).
 - `join:screening` handling with an **ack callback**: joins the room and returns
   the initial seat map + summary; returns an error result for a bad screening.
 - A second listener on the existing `reservation.created` / `reservation.cancelled`
@@ -28,35 +28,36 @@ identity for a later phase; it never gates access.
 - Enriching the reservation event payload with the changed `seatIds`.
 
 **Out (later phases, by design):**
+- **Any WS authentication / socket identity.** Not needed here (read-only). The
+  first real need is phase 7's per-holder notification; identity attachment is
+  deferred to it via a `DEFERRED(phase-7)` marker in `handleConnection`.
 - `seat:hold_expired` via Redis Pub/Sub bridge (phase 7) — needs the Cron job
   (phase 6) and Redis Instance 2 subscription. Marked `DEFERRED(phase-7)`.
-- Per-holder direct socket notification ("your hold expired") — needs the
-  identity attached here plus the phase-7 pub/sub message. Marked `DEFERRED(phase-7)`.
 - `BOOKED` / payment `HELD → CONFIRMED` seat transitions (phase 9).
 - Atomic Redis counters for the summary — **explicitly deferred to phase 11**
   (load testing). Decision below.
 
-## Authentication: optional, cookie-based
+## Why no WebSocket auth this phase
 
-`architecture.md` §3 originally specified a hard `WsJwtGuard` reading
-`handshake.auth.token`. Two corrections, both settled during design:
+`architecture.md` §3 originally specified a hard `WsJwtGuard` on every
+connection. That guard earns its place when the **socket carries a write/
+authorized action** — then the server must prove the user may perform it. Here:
 
-1. **Transport = httpOnly cookie**, not `handshake.auth.token`. The app never
-   exposes the JWT to JavaScript (`jwt.strategy.ts` reads `req.cookies.access_token`);
-   the browser sends that cookie on the WS handshake automatically. Using
-   `handshake.auth.token` would force the token into JS and defeat httpOnly.
-2. **Optional, not required.** The HTTP seat map (`GET /screenings/:id/seats`) is
-   **public / unguarded** (`screenings.controller.ts`). Requiring a login for the
-   *live* version would be inconsistent, and this phase broadcasts only
-   room-level data (no per-user payloads). So the gateway **never rejects** a
-   handshake.
+- The socket does **only read-only broadcasts** (seat/summary updates to a room).
+- The one mutating action — reserve/cancel — goes through the **HTTP endpoint,
+  already guarded** by `JwtAuthGuard` (`POST` / `DELETE /reservations`).
+- The seat map is already **public over HTTP** (`GET /screenings/:id/seats`, no
+  guard), so gating its live version behind a login would be inconsistent.
 
-**Mechanism:** `handleConnection(socket)` parses `access_token` from
-`socket.handshake.headers.cookie`; if present and valid (verified with
-`JwtService` + `JWT_ACCESS_SECRET`), it sets `socket.data.user = { id, email,
-role, name }`. Missing/invalid → socket stays anonymous, connection proceeds.
-The attached identity is unused this phase — it exists so phase-7 per-holder
-targeting has a foundation (`DEFERRED(phase-7)` marker at the attachment site).
+So the gateway **never authenticates and never rejects** a handshake. Anonymous
+and logged-in visitors are treated identically.
+
+The *only* future case that needs a socket's user identity is phase 7's
+per-holder "your hold expired" direct notification. Writing identity attachment
+now would ship code unused this phase — against our no-dead-code convention. It
+is deferred: `handleConnection` carries a `DEFERRED(phase-7)` marker noting that
+phase 7 attaches holder identity (reading the httpOnly `access_token` cookie via
+`JwtService`, and re-enabling `credentials: true` CORS) when it first needs it.
 
 ## Components
 
@@ -64,29 +65,26 @@ Follows the `src/gateway/` layout in `architecture.md` (line 496).
 
 ```
 src/gateway/
-├── gateway.module.ts               # imports ScreeningsModule; provides the below
-├── screening.gateway.ts            # @WebSocketGateway: connect + join:screening
-├── ws-identity.service.ts          # parse cookie -> verify JWT -> AuthUser | null
-├── reservation-broadcast.listener.ts  # @OnEvent reservation.* -> emit to room
+├── gateway.module.ts                   # imports ScreeningsModule; provides the below
+├── screening.gateway.ts                # @WebSocketGateway: connect + join:screening
+├── reservation-broadcast.listener.ts   # @OnEvent reservation.* -> emit to room
 └── test/
     ├── screening.gateway.spec.ts
-    ├── ws-identity.service.spec.ts
     └── reservation-broadcast.listener.spec.ts
 ```
 
 - `GatewayModule` imports `ScreeningsModule` (for `ScreeningsService`, already
-  exported) and `JwtModule`/`JwtService` for verification. Registered in
-  `app.module.ts`. `EventEmitterModule` is already global.
+  exported). Registered in `app.module.ts`. `EventEmitterModule` is already
+  global. No `JwtModule` this phase (no token verification).
 - The gateway holds the Socket.io `Server` (`@WebSocketServer()`) and exposes
   `emitToRoom(screeningId, event, payload)` used by the listener.
 
 ### `ScreeningGateway` (`screening.gateway.ts`)
 
-- `@WebSocketGateway({ cors: { origin: FRONTEND_URL, credentials: true } })` —
-  `credentials: true` is required for the browser to send the cookie
-  cross-origin on the handshake.
-- `handleConnection(socket)`: attach identity via `WsIdentityService` (never
-  throws; anonymous on failure).
+- `@WebSocketGateway({ cors: { origin: FRONTEND_URL } })` — origin only; no
+  `credentials` because no cookie is read this phase.
+- `handleConnection(socket)`: no auth. Carries a `DEFERRED(phase-7)` marker —
+  phase 7 attaches holder identity here for per-holder targeting.
 - `@SubscribeMessage('join:screening')` with an **ack callback**:
   1. Validate the screening via `ScreeningsService` (unknown or `CANCELLED` →
      ack `{ ok: false, error }`, do not join).
@@ -95,12 +93,6 @@ src/gateway/
   4. Ack `{ ok: true, seats, summary }`.
   The ack ties success/failure to *that* join request — no ambiguous global
   `error` event.
-
-### `WsIdentityService` (`ws-identity.service.ts`)
-
-- `identify(socket): AuthUser | null` — parse the `cookie` header, extract
-  `access_token`, `jwt.verify` it, map the payload to `AuthUser`. Any failure
-  (no cookie, no token, invalid/expired) returns `null`. No exceptions escape.
 
 ### `ReservationBroadcastListener` (`reservation-broadcast.listener.ts`)
 
@@ -204,7 +196,6 @@ recover.
 | Case | Handling |
 |---|---|
 | `join:screening` unknown / `CANCELLED` screening | ack `{ ok: false, error }`, no room join |
-| Invalid/missing/expired JWT cookie on connect | socket stays anonymous, connection proceeds |
 | Broadcast emit fails | logged, swallowed — never breaks the triggering HTTP request |
 | Summary computation fails | logged; seat delta still emitted, summary skipped |
 
@@ -212,12 +203,9 @@ recover.
 
 Mirror existing `src/**/test/*.spec.ts` style (Jest, mocked deps).
 
-- **`WsIdentityService`**: valid cookie → `AuthUser`; missing cookie / missing
-  `access_token` / malformed / expired token → `null`; never throws.
 - **`ScreeningGateway`**: `join:screening` joins `screening:{id}` and acks
   `{ ok: true, seats, summary }`; unknown/cancelled screening acks
-  `{ ok: false }` and does not join; `handleConnection` attaches
-  `socket.data.user` when the cookie is valid and leaves it undefined otherwise.
+  `{ ok: false }` and does not join.
 - **`ReservationBroadcastListener`**: `reservation.created` emits `seat:reserved`
   with the payload's `seatIds` + `screening:summary`; `reservation.cancelled`
   emits `seat:cancelled` + summary; a throwing emit is swallowed (no rethrow).
@@ -233,8 +221,8 @@ Same convention as the reservations phase: a single greppable
 
 | Seam | Where the comment goes | Phase |
 |---|---|---|
+| Socket identity + per-holder notification | in `handleConnection` (attach holder identity; re-add cookie/`credentials`) | 7 |
 | Redis Pub/Sub `seat:hold_expired` subscription | in the gateway, near the broadcast methods | 7 |
-| Per-holder direct notification | at the `socket.data.user` attachment in `handleConnection` | 7 |
 | `BOOKED` on payment confirm | in `reservation-broadcast.listener` status mapping | 9 |
 | Atomic Redis summary counters | on `getScreeningSummary` | 11 |
 
@@ -242,22 +230,23 @@ No stub classes or dead code — comments only.
 
 ## Companion changes to `architecture.md`
 
-1. **§3 (Real-Time Layer):** replace `handshake.auth.token` with the httpOnly
-   cookie transport; note optional-auth (public visitors); replace
-   `seat:initial_state` emit with the `join:screening` ack; add `screening:summary`
-   to the event contract.
+1. **§3 (Real-Time Layer):** the gateway is public/read-only this phase — **no
+   `WsJwtGuard`, no `handshake.auth.token`**. Note that per-holder targeting
+   (phase 7) will attach identity from the httpOnly `access_token` cookie then.
+   Replace the `seat:initial_state` emit with the `join:screening` ack; add
+   `screening:summary` to the event contract.
 2. **Build order:** add a late **"Integration Wiring" phase (phase 13)** whose
    job is to walk every `DEFERRED(phase-N)` marker across all modules and connect
-   it to the now-existing module — one deliberate pass to close all seams
-   (includes: gateway ↔ phase-7 pub/sub, per-holder targeting, phase-9 BOOKED
-   transitions, and a reconcile of any phase-11 summary counters).
+   it to the now-existing module — one deliberate pass to close all seams. *(Done
+   — added to `architecture.md`.)*
 
 ## Follow-ups noted for later phases
 
 - Phase 6: cron `expireHolds` releases expired holds (sets the seats this
   gateway will later broadcast as freed).
 - Phase 7: pub/sub bridge delivers `seat:hold_expired` to the gateway; gateway
-  broadcasts to the room **and** direct-notifies the holder via `socket.data.user`.
+  broadcasts to the room **and** direct-notifies the holder — the first case that
+  needs socket identity (attached in `handleConnection` then).
 - Phase 9: `HELD → CONFIRMED` emits a `BOOKED` seat transition through this
   listener.
 - Phase 11: revisit atomic Redis summary counters if load testing shows the
