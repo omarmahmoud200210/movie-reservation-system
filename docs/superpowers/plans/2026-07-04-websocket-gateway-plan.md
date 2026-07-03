@@ -941,7 +941,7 @@ git commit -m "feat(gateway): register GatewayModule in AppModule"
 
 - [ ] **Step 1: Replace the Real-Time Layer section**
 
-The Build Order's phase 13 entry was already added in an earlier session (currently uncommitted in the working tree — verify with `git diff -- architecture.md` before starting). This step adds the §3 rewrite on top of it.
+The Build Order's phase 13 entry was already added and committed in an earlier session (commit `bffdbd8`). This step adds the §3 rewrite on top of it.
 
 Replace lines 73–96 of `architecture.md` (the `### 3. Real-Time Layer (WebSocket Gateway)` section) with:
 
@@ -989,8 +989,11 @@ recover.
 
 - [ ] **Step 2: Verify the diff**
 
-Run: `cd /d/Products/Movie_Reservation_System && git diff -- architecture.md`
-Expected: shows both the phase-13 build-order addition (pre-existing) and the new §3 rewrite, with no leftover references to `handshake.auth.token`, `WsJwtGuard`, or `seat:initial_state` as a separate emit.
+Run (from the repo root of your workspace): `git diff -- architecture.md`
+Expected: shows only the new §3 rewrite (the phase-13 build-order addition is
+already committed as of `bffdbd8`), with no leftover references to
+`handshake.auth.token`, `WsJwtGuard`, or `seat:initial_state` as a separate
+emit.
 
 - [ ] **Step 3: Commit**
 
