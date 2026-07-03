@@ -167,6 +167,7 @@ describe('ReservationsService', () => {
       );
       expect(mockEvents.emit).toHaveBeenCalledWith(RESERVATION_CANCELLED, {
         screeningId: 3,
+        seatIds: [11],
       });
     });
 

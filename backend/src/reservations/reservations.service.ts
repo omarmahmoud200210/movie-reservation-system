@@ -79,6 +79,7 @@ export class ReservationsService {
     );
     this.events.emit(RESERVATION_CANCELLED, {
       screeningId: reservation.screeningId,
+      seatIds: [reservation.seatId],
     });
     return cancelled;
   }
