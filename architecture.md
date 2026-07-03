@@ -514,19 +514,32 @@ src/
 
 ## Build Order (Recommended)
 
-1. **Database** — schema, migrations, seed data (movies, halls, seats, refund policies) 
-2. **Auth** — register, login, JWT guard
-3. **Movies + Screenings** — read endpoints with caching
-4. **Reservations (HTTP)** — reserve, cancel with `SELECT FOR UPDATE`
-5. **WebSocket Gateway** — rooms, initial state, authentication
-6. **Cron Jobs** — hold expiry, screening completion, payment reconciliation
+1. **Database** — schema, migrations, seed data (movies, halls, seats, refund policies) ✅
+2. **Auth** — register, login, JWT guard ✅
+3. **Movies + Screenings** — read endpoints with caching ✅
+4. **Reservations (HTTP)** — reserve, cancel with `SELECT FOR UPDATE` ✅
+5. **WebSocket Gateway** — rooms, initial state, authentication 
+6. **Cron Jobs** — hold expiry, screening completion, payment reconciliation 
 7. **Redis Pub/Sub bridge** — connect cron to gateway
 8. **Rate Limiting** — middleware + guard
 9. **Payment** — Stripe checkout, webhook handler, refund logic
 10. **Observability** — Prometheus metrics, Grafana dashboards
 11. **Load Testing** — Artillery scenarios, tune under Grafana observation
 12. **Security hardening** — HTTPS, input validation, JWT in cookies
+13. **Integration Wiring** — walk every `DEFERRED(phase-N)` marker across all
+    modules and connect each seam to the module that now exists. Earlier phases
+    intentionally leave greppable `// DEFERRED(phase-N): …` comments (no stub
+    code) exactly where a not-yet-built module will plug in; this phase is the
+    single deliberate pass that closes them all. Find them with
+    `grep -rn "DEFERRED(phase-" backend/src`. Known seams so far:
+    - Reservations → WebSocket broadcast (phase 5, ✅ resolved when phase 5 ships)
+    - Reservations → Cron hold-expiry consuming `heldUntil` (phase 6)
+    - Gateway → Redis Pub/Sub `seat:hold_expired` + per-holder notification (phase 7)
+    - Reservations `POST` → rate limiting (phase 8)
+    - Reservations / Gateway → `HELD → CONFIRMED` / `BOOKED` on payment (phase 9)
+    - Gateway `getScreeningSummary` → atomic Redis counters if load testing warrants (phase 11)
 
 
 ## Notes for later
+
 - **TODO (e2e tests for OAuth guards):** controller unit tests call methods directly and bypass the guard pipeline, so guard logic (`GoogleLinkAuthGuard.getAuthenticateOptions`, redirect legs) has no automated coverage. Add e2e tests (supertest) for `/auth/google/callback` and `/auth/link-google/callback` with the Google strategy stubbed — these are the only tests that exercise `canActivate`/`getAuthenticateOptions`. Motivating bug: `getAuthenticateOptions` runs on *both* the initiation and callback legs; on the callback `req.user` is undefined (no `JwtAuthGuard` there), so an unguarded `user!.id` threw a runtime `TypeError` that every unit test passed straight through.
