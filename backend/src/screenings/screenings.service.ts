@@ -30,6 +30,16 @@ export interface SeatMapEntry {
   status: SeatStatus;
 }
 
+/** Derived counts for a screening, used by the live seat-updates broadcast. */
+export interface ScreeningSummary {
+  screeningId: number;
+  capacity: number;
+  held: number;
+  booked: number;
+  available: number;
+  reserved: number;
+}
+
 @Injectable()
 export class ScreeningsService {
   constructor(
@@ -185,6 +195,36 @@ export class ScreeningsService {
     }));
     await this.screeningsCache.setSeatMap(screeningId, seatMap);
     return seatMap;
+  }
+
+  /**
+   * Derived seat counts for a screening — held/booked/available/reserved.
+   * Reuses `getSeatMap`'s cache-aside read; no separate Redis structure, so
+   * this can never drift from the seat map (both invalidate together).
+   *
+   * DEFERRED(phase-11): if load testing shows this recompute-on-broadcast is
+   * a real hotspot, replace with an atomic Redis counter (HINCRBY on
+   * reserve/cancel) instead of guessing now.
+   */
+  async getScreeningSummary(screeningId: number): Promise<ScreeningSummary> {
+    const seatMap = await this.getSeatMap(screeningId);
+
+    let held = 0;
+    let booked = 0;
+    for (const seat of seatMap) {
+      if (seat.status === SeatStatus.HELD) held++;
+      else if (seat.status === SeatStatus.BOOKED) booked++;
+    }
+
+    const capacity = seatMap.length;
+    return {
+      screeningId,
+      capacity,
+      held,
+      booked,
+      available: capacity - held - booked,
+      reserved: held + booked,
+    };
   }
 
   private toSeatStatus(reservationStatus?: ReservationStatus): SeatStatus {

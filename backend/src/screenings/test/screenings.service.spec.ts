@@ -416,6 +416,59 @@ describe('ScreeningsService', () => {
     });
   });
 
+  describe('getScreeningSummary', () => {
+    beforeEach(() => {
+      mockScreeningsCache.getSeatMap.mockResolvedValue(null);
+    });
+
+    it('derives capacity/held/booked/available/reserved from the seat map', async () => {
+      mockScreeningsRepo.findById.mockResolvedValue(existing);
+      mockScreeningsRepo.findSeatsByHall.mockResolvedValue([
+        { id: 100, hallId: 2, row: 'A', number: '1' },
+        { id: 101, hallId: 2, row: 'A', number: '2' },
+        { id: 102, hallId: 2, row: 'A', number: '3' },
+        { id: 103, hallId: 2, row: 'A', number: '4' },
+      ]);
+      mockScreeningsRepo.findActiveReservations.mockResolvedValue([
+        { seatId: 100, status: ReservationStatus.HELD },
+        { seatId: 101, status: ReservationStatus.CONFIRMED },
+      ]);
+
+      await expect(service.getScreeningSummary(10)).resolves.toEqual({
+        screeningId: 10,
+        capacity: 4,
+        held: 1,
+        booked: 1,
+        available: 2,
+        reserved: 2,
+      });
+    });
+
+    it('reads from the warm seat-map cache without hitting the DB', async () => {
+      mockScreeningsCache.getSeatMap.mockResolvedValue([
+        { seatId: 1, row: 'A', number: '1', status: SeatStatus.AVAILABLE },
+      ]);
+
+      await expect(service.getScreeningSummary(10)).resolves.toEqual({
+        screeningId: 10,
+        capacity: 1,
+        held: 0,
+        booked: 0,
+        available: 1,
+        reserved: 0,
+      });
+      expect(mockScreeningsRepo.findById).not.toHaveBeenCalled();
+    });
+
+    it('throws 404 for a cancelled/unknown screening (propagated from getSeatMap)', async () => {
+      mockScreeningsRepo.findById.mockResolvedValue(null);
+
+      await expect(service.getScreeningSummary(99)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+  });
+
   describe('caching', () => {
     describe('getSeatMap (cache-aside)', () => {
       it('serves from cache on a hit without querying the DB', async () => {
