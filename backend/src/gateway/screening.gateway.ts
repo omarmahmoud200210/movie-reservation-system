@@ -64,6 +64,10 @@ export class ScreeningGateway implements OnGatewayConnection {
       if (err instanceof NotFoundException) {
         return { ok: false, error: err.message };
       }
+      // Unexpected errors are intentionally not packed into the ack — only
+      // expected client-facing failures (bad screening) get `{ ok: false }`.
+      // This propagates to Nest's WS exception filter; the client relies on
+      // Socket.io reconnect/retry rather than a bespoke error payload.
       throw err;
     }
   }
