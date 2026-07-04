@@ -73,10 +73,29 @@ describe('ReservationBroadcastListener', () => {
       );
     });
 
-    it('swallows a failing emit instead of throwing', async () => {
+    it('swallows a failing emit instead of throwing, and still broadcasts the summary', async () => {
       mockGateway.emitToRoom.mockImplementationOnce(() => {
         throw new Error('socket error');
       });
+
+      await expect(
+        listener.handleCreated({ screeningId: 10, seatIds: [1] }),
+      ).resolves.toBeUndefined();
+
+      expect(mockGateway.emitToRoom).toHaveBeenCalledWith(
+        10,
+        'screening:summary',
+        summary,
+      );
+    });
+
+    it('swallows failures in both the emit and the summary computation', async () => {
+      mockGateway.emitToRoom.mockImplementationOnce(() => {
+        throw new Error('socket error');
+      });
+      mockScreeningsService.getScreeningSummary.mockRejectedValue(
+        new Error('cache down'),
+      );
 
       await expect(
         listener.handleCreated({ screeningId: 10, seatIds: [1] }),

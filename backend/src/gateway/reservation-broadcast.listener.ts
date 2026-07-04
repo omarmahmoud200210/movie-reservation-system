@@ -55,6 +55,13 @@ export class ReservationBroadcastListener {
       this.logger.warn(`${event} broadcast failed: ${String(err)}`);
     }
 
+    // Note: this reads the same seat-map cache that ReservationCacheListener
+    // invalidates on the same event, with no ordering guarantee between the
+    // two listeners (EventEmitter2 doesn't await one against the other). A
+    // stale read here is self-healing — the next reservation event recomputes
+    // correctly, and the seat-delta above is always accurate since it comes
+    // from the event payload, not the cache — so this is an accepted,
+    // documented risk rather than a bug to eliminate.
     try {
       const summary = await this.screeningsService.getScreeningSummary(
         payload.screeningId,
