@@ -106,7 +106,7 @@ export class ReservationsRepository {
   releaseExpiredHolds(now: Date): Promise<ExpiredHold[]> {
     return this.prisma.$queryRaw<ExpiredHold[]>(Prisma.sql`
       UPDATE "reservation"
-      SET status = 'CANCELLED', "heldUntil" = NULL
+      SET status = 'CANCELLED', "heldUntil" = NULL, "updatedAt" = ${now}
       WHERE status = 'HELD' AND "heldUntil" < ${now}
       RETURNING id, "screeningId", "seatId"
     `);
