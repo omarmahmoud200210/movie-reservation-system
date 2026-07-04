@@ -136,7 +136,9 @@ export class AuthController {
       return res.redirect(`${process.env.FRONTEND_URL}/auth/google/callback`);
     } catch (err) {
       if (err instanceof ConflictException) {
-        return res.redirect(`${process.env.FRONTEND_URL}/login?error=account_exists`);
+        return res.redirect(
+          `${process.env.FRONTEND_URL}/login?error=account_exists`,
+        );
       }
       throw err;
     }
