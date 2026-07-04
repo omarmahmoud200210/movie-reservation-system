@@ -221,7 +221,7 @@ Client (Browser / Mobile)
 
 - [ ] HTTPS / WSS enforced — TLS certificate via Let's Encrypt or Cloudflare
 - [ ] JWT stored in httpOnly cookies (not localStorage)
-- [ ] WsJwtGuard on all WebSocket events
+- [x] WebSocket gateway is intentionally public/read-only — no `WsJwtGuard` (see §3); socket identity is added in the pub/sub phase for per-holder targeting only, not for authorization
 - [ ] User identity always from JWT, never from client payload
 - [ ] Rate limiting on all sensitive endpoints
 - [ ] Unique constraint on (seat_id, screening_id) in DB
