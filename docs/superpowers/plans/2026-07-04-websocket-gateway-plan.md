@@ -27,7 +27,7 @@ Read `docs/superpowers/specs/2026-07-03-websocket-gateway-design.md` in full. Ke
 - Modify: `backend/src/reservations/events/reservation.events.ts`
 - Modify: `backend/src/reservations/test/reservation-cache.listener.spec.ts:23-27`
 
-- [ ] **Step 1: Update the failing/changed test first**
+- [x] **Step 1: Update the failing/changed test first**
 
 In `backend/src/reservations/test/reservation-cache.listener.spec.ts`, change the payload literal at line 24 to include `seatIds` (the listener ignores it, but the type will require it):
 
@@ -39,12 +39,12 @@ In `backend/src/reservations/test/reservation-cache.listener.spec.ts`, change th
   });
 ```
 
-- [ ] **Step 2: Run the test to see the current type error / behavior**
+- [x] **Step 2: Run the test to see the current type error / behavior**
 
 Run: `cd backend && npx jest reservation-cache.listener.spec.ts`
 Expected: still PASSES right now (payload type isn't enforced until Step 3 changes the interface) — this step just gets the test file into its final shape before the type change.
 
-- [ ] **Step 3: Add `seatIds` to the payload type**
+- [x] **Step 3: Add `seatIds` to the payload type**
 
 In `backend/src/reservations/events/reservation.events.ts`, replace the whole file:
 
@@ -65,12 +65,12 @@ export interface ReservationChangedPayload {
 }
 ```
 
-- [ ] **Step 4: Run the full reservations test suite to confirm nothing else broke**
+- [x] **Step 4: Run the full reservations test suite to confirm nothing else broke**
 
 Run: `cd backend && npx jest reservations`
 Expected: FAIL — `reservations.service.spec.ts` assertions on `mockEvents.emit` still expect the old 2-field payload shape (compiles fine since those are separate literals in `toHaveBeenCalledWith`, but will now mismatch actual calls once Task 2/3 change the emit calls). At this point (before Task 2/3), it should still PASS, since `reservations.service.ts` hasn't changed yet. Confirm: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/src/reservations/events/reservation.events.ts backend/src/reservations/test/reservation-cache.listener.spec.ts
@@ -85,7 +85,7 @@ git commit -m "feat(reservations): add seatIds to the reservation.* event payloa
 - Modify: `backend/src/reservations/reservations.service.ts:31-59`
 - Modify: `backend/src/reservations/test/reservations.service.spec.ts:89-98`
 
-- [ ] **Step 1: Update the test to expect `seatIds` in the emitted event**
+- [x] **Step 1: Update the test to expect `seatIds` in the emitted event**
 
 In `backend/src/reservations/test/reservations.service.spec.ts`, replace the `'emits reservation.created...'` test (lines 89–98):
 
@@ -106,12 +106,12 @@ In `backend/src/reservations/test/reservations.service.spec.ts`, replace the `'e
     });
 ```
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `cd backend && npx jest reservations.service.spec.ts -t "emits reservation.created"`
 Expected: FAIL — actual call was `{ screeningId: 3 }`, missing `seatIds`.
 
-- [ ] **Step 3: Update `reserve()` to emit `seatIds`**
+- [x] **Step 3: Update `reserve()` to emit `seatIds`**
 
 In `backend/src/reservations/reservations.service.ts`, replace the `emit` line inside `reserve` (currently line 57):
 
@@ -131,12 +131,12 @@ In `backend/src/reservations/reservations.service.ts`, replace the `emit` line i
     return reservations;
 ```
 
-- [ ] **Step 4: Run the test to verify it passes**
+- [x] **Step 4: Run the test to verify it passes**
 
 Run: `cd backend && npx jest reservations.service.spec.ts`
 Expected: PASS (all tests in the file, including the one from Step 1).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/src/reservations/reservations.service.ts backend/src/reservations/test/reservations.service.spec.ts
@@ -151,7 +151,7 @@ git commit -m "feat(reservations): emit held seatIds on reservation.created"
 - Modify: `backend/src/reservations/reservations.service.ts:61-81`
 - Modify: `backend/src/reservations/test/reservations.service.spec.ts:153-167`
 
-- [ ] **Step 1: Update the test to expect `seatIds` in the emitted event**
+- [x] **Step 1: Update the test to expect `seatIds` in the emitted event**
 
 In `backend/src/reservations/test/reservations.service.spec.ts`, replace the `'cancels a HELD reservation...'` test (lines 153–167):
 
@@ -176,12 +176,12 @@ In `backend/src/reservations/test/reservations.service.spec.ts`, replace the `'c
 
 (`held.seatId` is already `11` per the fixture at line 149 — no fixture change needed.)
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 Run: `cd backend && npx jest reservations.service.spec.ts -t "cancels a HELD reservation"`
 Expected: FAIL — actual call was `{ screeningId: 3 }`, missing `seatIds`.
 
-- [ ] **Step 3: Update `cancel()` to emit `seatIds`**
+- [x] **Step 3: Update `cancel()` to emit `seatIds`**
 
 In `backend/src/reservations/reservations.service.ts`, replace the `emit` line inside `cancel` (currently line 77):
 
@@ -197,12 +197,12 @@ In `backend/src/reservations/reservations.service.ts`, replace the `emit` line i
     return cancelled;
 ```
 
-- [ ] **Step 4: Run the full reservations suite to verify everything passes**
+- [x] **Step 4: Run the full reservations suite to verify everything passes**
 
 Run: `cd backend && npx jest reservations`
 Expected: PASS — all reservations tests (service, controller, repository, cache listener) green.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/src/reservations/reservations.service.ts backend/src/reservations/test/reservations.service.spec.ts
@@ -217,7 +217,7 @@ git commit -m "feat(reservations): emit cancelled seatId on reservation.cancelle
 - Modify: `backend/src/screenings/screenings.service.ts`
 - Modify: `backend/src/screenings/test/screenings.service.spec.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 In `backend/src/screenings/test/screenings.service.spec.ts`, add a new `describe` block right after the existing `describe('getSeatMap', ...)` block (i.e. before the `describe('caching', ...)` block, around line 418):
 
@@ -276,12 +276,12 @@ In `backend/src/screenings/test/screenings.service.spec.ts`, add a new `describe
   });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd backend && npx jest screenings.service.spec.ts -t "getScreeningSummary"`
 Expected: FAIL with `service.getScreeningSummary is not a function`.
 
-- [ ] **Step 3: Implement `getScreeningSummary`**
+- [x] **Step 3: Implement `getScreeningSummary`**
 
 In `backend/src/screenings/screenings.service.ts`, add the `ScreeningSummary` interface next to `SeatMapEntry` (after line 31):
 
@@ -331,12 +331,12 @@ Then add the method to `ScreeningsService`, right after `getSeatMap` (after line
   }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `cd backend && npx jest screenings.service.spec.ts`
 Expected: PASS — all tests in the file, including the new `getScreeningSummary` block.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add backend/src/screenings/screenings.service.ts backend/src/screenings/test/screenings.service.spec.ts
@@ -352,7 +352,7 @@ git commit -m "feat(screenings): add getScreeningSummary derived from the seat-m
 - Create: `backend/src/gateway/gateway.module.ts`
 - Create: `backend/src/gateway/test/screening.gateway.spec.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `backend/src/gateway/test/screening.gateway.spec.ts`:
 
@@ -473,12 +473,12 @@ describe('ScreeningGateway', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd backend && npx jest screening.gateway.spec.ts`
 Expected: FAIL — `Cannot find module '../screening.gateway'`.
 
-- [ ] **Step 3: Implement `ScreeningGateway`**
+- [x] **Step 3: Implement `ScreeningGateway`**
 
 Create `backend/src/gateway/screening.gateway.ts`:
 
@@ -564,7 +564,7 @@ export class ScreeningGateway implements OnGatewayConnection {
 }
 ```
 
-- [ ] **Step 4: Create the module**
+- [x] **Step 4: Create the module**
 
 Create `backend/src/gateway/gateway.module.ts`:
 
@@ -586,12 +586,12 @@ import { ScreeningGateway } from './screening.gateway';
 export class GatewayModule {}
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `cd backend && npx jest screening.gateway.spec.ts`
 Expected: PASS — all 6 tests green.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add backend/src/gateway/screening.gateway.ts backend/src/gateway/gateway.module.ts backend/src/gateway/test/screening.gateway.spec.ts
@@ -607,7 +607,7 @@ git commit -m "feat(gateway): add ScreeningGateway with public join:screening ac
 - Create: `backend/src/gateway/test/reservation-broadcast.listener.spec.ts`
 - Modify: `backend/src/gateway/gateway.module.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `backend/src/gateway/test/reservation-broadcast.listener.spec.ts`:
 
@@ -733,12 +733,12 @@ describe('ReservationBroadcastListener', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `cd backend && npx jest reservation-broadcast.listener.spec.ts`
 Expected: FAIL — `Cannot find module '../reservation-broadcast.listener'`.
 
-- [ ] **Step 3: Implement `ReservationBroadcastListener`**
+- [x] **Step 3: Implement `ReservationBroadcastListener`**
 
 Create `backend/src/gateway/reservation-broadcast.listener.ts`:
 
@@ -812,7 +812,7 @@ export class ReservationBroadcastListener {
 }
 ```
 
-- [ ] **Step 4: Resolve the stale `DEFERRED(phase-5)` marker in the reservations module**
+- [x] **Step 4: Resolve the stale `DEFERRED(phase-5)` marker in the reservations module**
 
 `backend/src/reservations/listeners/reservation-cache.listener.ts` carries a
 comment reserving this exact listener slot. Now that it's built, update the
@@ -834,7 +834,7 @@ comment so it doesn't read as still-open. Replace the class docstring:
 subscribes...` line — the seam it reserved is now built, so the comment
 should describe what exists, not what's still missing.)
 
-- [ ] **Step 5: Register the listener in `GatewayModule`**
+- [x] **Step 5: Register the listener in `GatewayModule`**
 
 Modify `backend/src/gateway/gateway.module.ts`:
 
@@ -858,7 +858,7 @@ import { ReservationBroadcastListener } from './reservation-broadcast.listener';
 export class GatewayModule {}
 ```
 
-- [ ] **Step 6: Run the tests to verify they pass**
+- [x] **Step 6: Run the tests to verify they pass**
 
 Run: `cd backend && npx jest reservation-broadcast.listener.spec.ts`
 Expected: PASS — all tests green.
@@ -866,7 +866,7 @@ Expected: PASS — all tests green.
 Also run: `cd backend && npx jest reservation-cache.listener.spec.ts`
 Expected: PASS — Step 4's docstring-only change doesn't affect behavior.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add backend/src/gateway/reservation-broadcast.listener.ts backend/src/gateway/gateway.module.ts backend/src/gateway/test/reservation-broadcast.listener.spec.ts backend/src/reservations/listeners/reservation-cache.listener.ts
@@ -880,7 +880,7 @@ git commit -m "feat(gateway): broadcast seat deltas and summary on reservation e
 **Files:**
 - Modify: `backend/src/app.module.ts`
 
-- [ ] **Step 1: Add the import**
+- [x] **Step 1: Add the import**
 
 Replace `backend/src/app.module.ts` in full:
 
@@ -917,7 +917,7 @@ import { GatewayModule } from './gateway/gateway.module';
 export class AppModule {}
 ```
 
-- [ ] **Step 2: Verify the app still boots and the full test suite passes**
+- [x] **Step 2: Verify the app still boots and the full test suite passes**
 
 Run: `cd backend && npx jest`
 Expected: PASS — every existing suite plus the new gateway tests, no regressions.
@@ -925,7 +925,7 @@ Expected: PASS — every existing suite plus the new gateway tests, no regressio
 Run: `cd backend && npx tsc --noEmit -p tsconfig.build.json`
 Expected: no type errors.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add backend/src/app.module.ts
@@ -939,7 +939,7 @@ git commit -m "feat(gateway): register GatewayModule in AppModule"
 **Files:**
 - Modify: `architecture.md:73-96`
 
-- [ ] **Step 1: Replace the Real-Time Layer section**
+- [x] **Step 1: Replace the Real-Time Layer section**
 
 The Build Order's phase 13 entry was already added and committed in an earlier session (commit `bffdbd8`). This step adds the §3 rewrite on top of it.
 
@@ -987,7 +987,7 @@ On every `connect` event (first connect + reconnects), client re-emits
 recover.
 ```
 
-- [ ] **Step 2: Verify the diff**
+- [x] **Step 2: Verify the diff**
 
 Run (from the repo root of your workspace): `git diff -- architecture.md`
 Expected: shows only the new §3 rewrite (the phase-13 build-order addition is
@@ -995,7 +995,7 @@ already committed as of `bffdbd8`), with no leftover references to
 `handshake.auth.token`, `WsJwtGuard`, or `seat:initial_state` as a separate
 emit.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add architecture.md
@@ -1008,7 +1008,7 @@ git commit -m "docs: sync architecture.md with the public/read-only WebSocket ga
 
 **Files:** none (verification only)
 
-- [ ] **Step 1: Run the entire backend test suite**
+- [x] **Step 1: Run the entire backend test suite**
 
 Run: `cd backend && npx jest`
 Expected: every suite passes, including:
@@ -1017,12 +1017,12 @@ Expected: every suite passes, including:
 - `gateway/test/screening.gateway.spec.ts`
 - `gateway/test/reservation-broadcast.listener.spec.ts`
 
-- [ ] **Step 2: Type-check the whole project**
+- [x] **Step 2: Type-check the whole project**
 
 Run: `cd backend && npx tsc --noEmit -p tsconfig.build.json`
 Expected: no errors.
 
-- [ ] **Step 3: Grep for the deferred markers this phase introduced/resolved**
+- [x] **Step 3: Grep for the deferred markers this phase introduced/resolved**
 
 Run: `cd backend && grep -rn "DEFERRED(phase-" src`
 Expected output includes four new markers left by this phase, all in
@@ -1039,7 +1039,7 @@ phase-6/phase-9, `reservations.controller.ts` phase-8). The old
 appear — Task 6 Step 4 replaced it with a plain docstring, since that seam is
 now built rather than pending.
 
-- [ ] **Step 4: Boot the app and confirm the gateway registers without error**
+- [x] **Step 4: Boot the app and confirm the gateway registers without error**
 
 Run: `cd backend && npm run start:dev` (or `npx nest start`), watch the log
 Expected: app starts on the configured port with no `GatewayModule` /
