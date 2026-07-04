@@ -522,7 +522,7 @@ Lives inside the NestJS app using `@nestjs/schedule`.
 | Job | Schedule | Responsibility |
 |---|---|---|
 | `expireHolds` | Every 1 min | Find held_until < NOW() → release seat → publish to Pub/Sub |
-| `completeScreenings` | Every 15 min | Find screenings past starts_at + duration → mark completed |
+| `completeScreenings` | Every 15 min | Find screenings past starts_at + duration → mark completed | "ignore this"
 ```
 
 Replace it with:
@@ -550,12 +550,41 @@ instead reuses the same in-process event the WebSocket gateway already
 consumes, which is sufficient for a single-instance deployment today.
 ```
 
-- [ ] **Step 2: Verify the diff**
+- [ ] **Step 2: Update the Integration Wiring (phase 13) seam list**
+
+Find the `13. **Integration Wiring**` entry in the Build Order section (near
+the bottom of `architecture.md`). It currently lists known seams as:
+
+```markdown
+    - Reservations → WebSocket broadcast (phase 5, ✅ resolved when phase 5 ships)
+    - Reservations → Cron hold-expiry consuming `heldUntil` (phase 6)
+    - Gateway → Redis Pub/Sub `seat:hold_expired` + per-holder notification (phase 7)
+    - Reservations `POST` → rate limiting (phase 8)
+    - Reservations / Gateway → `HELD → CONFIRMED` / `BOOKED` on payment (phase 9)
+    - Gateway `getScreeningSummary` → atomic Redis counters if load testing warrants (phase 11)
+```
+
+Replace it with (marks phase 6 resolved, matching how phase 5 was marked when
+it shipped; adds the new payment-reconciliation seam this phase's
+`hold-expiry.cron.ts` leaves behind):
+
+```markdown
+    - Reservations → WebSocket broadcast (phase 5, ✅ resolved when phase 5 shipped)
+    - Reservations → Cron hold-expiry consuming `heldUntil` (phase 6, ✅ resolved when phase 6 shipped)
+    - Gateway → Redis Pub/Sub `seat:hold_expired` + per-holder notification (phase 7)
+    - Reservations `POST` → rate limiting (phase 8)
+    - Reservations / Gateway → `HELD → CONFIRMED` / `BOOKED` on payment (phase 9)
+    - Cron → payment reconciliation job (finds `timed_out` payments, reconciles with Stripe) (phase 9)
+    - Gateway `getScreeningSummary` → atomic Redis counters if load testing warrants (phase 11)
+```
+
+- [ ] **Step 3: Verify the diff**
 
 Run: `git diff -- architecture.md`
-Expected: shows only the §6 rewrite — no other section changed.
+Expected: shows the §6 rewrite and the Integration Wiring seam-list update —
+no other section changed.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 git add architecture.md
