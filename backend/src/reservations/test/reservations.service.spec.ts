@@ -19,6 +19,7 @@ const mockReservationsRepo = {
   findById: jest.fn(),
   setStatus: jest.fn(),
   findByUser: jest.fn(),
+  releaseExpiredHolds: jest.fn(),
 };
 const mockScreeningsRepo = { findById: jest.fn() };
 const mockEvents = { emit: jest.fn() };
@@ -209,6 +210,46 @@ describe('ReservationsService', () => {
 
       await expect(service.listMine(7)).resolves.toBe(rows);
       expect(mockReservationsRepo.findByUser).toHaveBeenCalledWith(7);
+    });
+  });
+
+  describe('expireHolds', () => {
+    it('does nothing and emits no event when nothing has expired', async () => {
+      mockReservationsRepo.releaseExpiredHolds.mockResolvedValue([]);
+
+      await service.expireHolds();
+
+      expect(mockEvents.emit).not.toHaveBeenCalled();
+    });
+
+    it('emits one reservation.cancelled per screening, grouping seat ids', async () => {
+      mockReservationsRepo.releaseExpiredHolds.mockResolvedValue([
+        { id: 100, screeningId: 3, seatId: 11 },
+        { id: 101, screeningId: 3, seatId: 12 },
+        { id: 102, screeningId: 5, seatId: 20 },
+      ]);
+
+      await service.expireHolds();
+
+      expect(mockEvents.emit).toHaveBeenCalledTimes(2);
+      expect(mockEvents.emit).toHaveBeenCalledWith(RESERVATION_CANCELLED, {
+        screeningId: 3,
+        seatIds: [11, 12],
+      });
+      expect(mockEvents.emit).toHaveBeenCalledWith(RESERVATION_CANCELLED, {
+        screeningId: 5,
+        seatIds: [20],
+      });
+    });
+
+    it('passes the current time to the repository', async () => {
+      mockReservationsRepo.releaseExpiredHolds.mockResolvedValue([]);
+
+      await service.expireHolds();
+
+      expect(mockReservationsRepo.releaseExpiredHolds).toHaveBeenCalledWith(
+        NOW,
+      );
     });
   });
 });
