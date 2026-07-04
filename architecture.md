@@ -72,27 +72,43 @@ Cold screenings → serve seat map from Redis.
 
 ### 3. Real-Time Layer (WebSocket Gateway)
 
-**Protocol:** Socket.io over WSS  
+**Protocol:** Socket.io over WSS
 **Room naming:** `screening:{screening_id}`
+
+**Access:** Public and read-only. Every visitor — logged in or not — can
+connect and receive live seat/summary updates. There is no WS authentication:
+the only mutating action (reserve/cancel) happens over the already-guarded
+HTTP API, so there is nothing on the socket to authorize. (A prior version of
+this doc specified a hard `WsJwtGuard` on every connection — dropped because
+the seat map is already public over HTTP, and gating its live version would
+be inconsistent. Socket identity returns in the pub/sub phase below, for
+per-holder targeting only.)
 
 **Event Contract**
 
 | Event | Direction | Payload |
 |---|---|---|
-| `join:screening` | Client → Server | `{ screening_id }` |
-| `seat:initial_state` | Server → Client | `{ seats: [{ seat_id, status }] }` |
-| `seat:reserved` | Server → Room | `{ seat_id, status: 'held' }` |
-| `seat:cancelled` | Server → Room | `{ seat_id, status: 'available' }` |
-| `seat:hold_expired` | Server → Room + Holder | `{ seat_id, status: 'available' }` |
+| `join:screening` | Client → Server | `{ screening_id }`, ack response: `{ ok: true, seats, summary }` or `{ ok: false, error }` |
+| `seat:reserved` | Server → Room | `{ screening_id, seat_ids, status: 'HELD' }` |
+| `seat:cancelled` | Server → Room | `{ screening_id, seat_ids, status: 'AVAILABLE' }` |
+| `screening:summary` | Server → Room | `{ screening_id, capacity, held, booked, available, reserved }` |
 
-**Authentication**  
-Token passed via `client.handshake.auth.token` — validated by `WsJwtGuard` on every connection.  
-User identity always extracted from JWT, never from event payload.
+`join:screening` returns the initial seat map + summary via its **ack
+callback**, tying the response to that specific request — no separate
+`seat:initial_state` emit and no ambiguous global `error` event.
 
-**Reconnection Flow**  
-Socket.io auto-reconnects with exponential backoff.  
-On every `connect` event (first connect + reconnects), client re-emits `join:screening`.  
-Server responds with fresh `seat:initial_state` from Redis — client re-syncs fully.
+**Summary derivation**
+`screening:summary` is not a separate Redis counter — it's derived on every
+broadcast from the same cache-aside seat map (`seat_map:screening:{id}`) the
+HTTP seat-map endpoint already uses, so it can never drift from it. Revisit
+with an atomic Redis counter only if load testing (phase 11) shows this
+recompute is a real hotspot.
+
+**Reconnection Flow**
+Socket.io auto-reconnects with exponential backoff.
+On every `connect` event (first connect + reconnects), client re-emits
+`join:screening` and gets a fresh ack — full resync, no server-side state to
+recover.
 
 ---
 
