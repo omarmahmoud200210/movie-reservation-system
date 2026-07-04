@@ -167,12 +167,24 @@ rate_limit:user:{user_id}:{endpoint}
 
 ### 6. Scheduled Jobs (Cron Service)
 
-Lives inside the NestJS app using `@nestjs/schedule`.
+Lives inside the NestJS app using `@nestjs/schedule`. Each job is a thin
+`@Cron`-decorated trigger (`src/cron/`) into an existing domain service — no
+business logic lives in the cron module itself.
 
 | Job | Schedule | Responsibility |
 |---|---|---|
-| `expireHolds` | Every 1 min | Find held_until < NOW() → release seat → publish to Pub/Sub |
-| `completeScreenings` | Every 15 min | Find screenings past starts_at + duration → mark completed |
+| `expireHolds` | Every 1 min | Atomically release HELD reservations whose `heldUntil` has passed, grouped by screening, emitting the existing `reservation.cancelled` event per group (drives cache invalidation and the WebSocket broadcast for free — no new listener). |
+
+`completeScreenings` is intentionally not built: no code in this codebase
+reads `ScreenStatus.COMPLETED` today (the "now showing" query and the
+reservation-creation guard already independently gate on `startTime`
+comparisons). Revisit when a real consumer appears — an admin screening list,
+reviews/ratings, analytics, or phase-9 payment reconciliation.
+
+Publishing to the Redis Pub/Sub bridge (§4) for cross-instance broadcast and
+per-holder direct notification is phase 7, not this phase — `expireHolds`
+instead reuses the same in-process event the WebSocket gateway already
+consumes, which is sufficient for a single-instance deployment today.
 
 ---
 
@@ -548,11 +560,12 @@ src/
     code) exactly where a not-yet-built module will plug in; this phase is the
     single deliberate pass that closes them all. Find them with
     `grep -rn "DEFERRED(phase-" backend/src`. Known seams so far:
-    - Reservations → WebSocket broadcast (phase 5, ✅ resolved when phase 5 ships)
-    - Reservations → Cron hold-expiry consuming `heldUntil` (phase 6)
+    - Reservations → WebSocket broadcast (phase 5, ✅ resolved when phase 5 shipped)
+    - Reservations → Cron hold-expiry consuming `heldUntil` (phase 6, ✅ resolved when phase 6 shipped)
     - Gateway → Redis Pub/Sub `seat:hold_expired` + per-holder notification (phase 7)
     - Reservations `POST` → rate limiting (phase 8)
     - Reservations / Gateway → `HELD → CONFIRMED` / `BOOKED` on payment (phase 9)
+    - Cron → payment reconciliation job (finds `timed_out` payments, reconciles with Stripe) (phase 9)
     - Gateway `getScreeningSummary` → atomic Redis counters if load testing warrants (phase 11)
 
 

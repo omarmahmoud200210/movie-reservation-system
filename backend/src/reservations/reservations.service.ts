@@ -42,8 +42,8 @@ export class ReservationsService {
       throw new BadRequestException('Screening has already started');
     }
 
-    // DEFERRED(phase-6): the cron `expireHolds` job releases holds whose
-    // heldUntil has passed and are still HELD.
+    // The cron `expireHolds` job (src/cron/hold-expiry.cron.ts) releases
+    // holds whose heldUntil has passed and are still HELD.
     const heldUntil = new Date(Date.now() + HOLD_MINUTES * 60_000);
 
     const reservations = await this.reservationsRepo.holdSeats({
@@ -59,6 +59,31 @@ export class ReservationsService {
       seatIds: reservations.map((r) => r.seatId),
     });
     return reservations;
+  }
+
+  /**
+   * Release every HELD reservation whose 10-minute hold has expired. Groups
+   * the released rows by screening and emits the existing
+   * `reservation.cancelled` event per group — reusing the same event the
+   * cache-invalidation and WebSocket-broadcast listeners already handle, so
+   * an expired hold shows up live with no new listener code.
+   */
+  async expireHolds(): Promise<void> {
+    const released = await this.reservationsRepo.releaseExpiredHolds(
+      new Date(),
+    );
+    if (released.length === 0) return;
+
+    const byScreening = new Map<number, number[]>();
+    for (const r of released) {
+      const seatIds = byScreening.get(r.screeningId) ?? [];
+      seatIds.push(r.seatId);
+      byScreening.set(r.screeningId, seatIds);
+    }
+
+    for (const [screeningId, seatIds] of byScreening) {
+      this.events.emit(RESERVATION_CANCELLED, { screeningId, seatIds });
+    }
   }
 
   async cancel(userId: number, id: number): Promise<Reservation> {

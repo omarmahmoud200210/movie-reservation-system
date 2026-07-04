@@ -15,6 +15,7 @@ const mockTx = {
 
 const mockPrisma = {
   $transaction: jest.fn(),
+  $queryRaw: jest.fn(),
   reservation: {
     findUnique: jest.fn(),
     update: jest.fn(),
@@ -173,6 +174,28 @@ describe('ReservationsRepository', () => {
         },
         orderBy: { createdAt: 'desc' },
       });
+    });
+  });
+
+  describe('releaseExpiredHolds', () => {
+    it('runs the atomic RETURNING update and resolves with the released rows', async () => {
+      const released = [
+        { id: 100, screeningId: 3, seatId: 11 },
+        { id: 101, screeningId: 3, seatId: 12 },
+      ];
+      mockPrisma.$queryRaw.mockResolvedValue(released);
+      const now = new Date('2026-07-04T12:00:00.000Z');
+
+      await expect(repo.releaseExpiredHolds(now)).resolves.toBe(released);
+      expect(mockPrisma.$queryRaw).toHaveBeenCalledTimes(1);
+    });
+
+    it('resolves with an empty array when nothing has expired', async () => {
+      mockPrisma.$queryRaw.mockResolvedValue([]);
+
+      await expect(
+        repo.releaseExpiredHolds(new Date()),
+      ).resolves.toEqual([]);
     });
   });
 });

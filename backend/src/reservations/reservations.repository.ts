@@ -14,6 +14,12 @@ export interface HoldSeatsParams {
   heldUntil: Date;
 }
 
+export interface ExpiredHold {
+  id: number;
+  screeningId: number;
+  seatId: number;
+}
+
 @Injectable()
 export class ReservationsRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -88,6 +94,22 @@ export class ReservationsRepository {
         throw err;
       }
     });
+  }
+
+  /**
+   * Atomically release every HELD reservation whose hold has expired,
+   * returning exactly the rows this call changed. A single UPDATE...RETURNING
+   * has no find-then-update race window, unlike a separate SELECT + UPDATE.
+   * Reuses the same Prisma.sql/$queryRaw escape hatch as `holdSeats`, for the
+   * same reason: Prisma's query builder can't express this.
+   */
+  releaseExpiredHolds(now: Date): Promise<ExpiredHold[]> {
+    return this.prisma.$queryRaw<ExpiredHold[]>(Prisma.sql`
+      UPDATE "reservation"
+      SET status = 'CANCELLED', "heldUntil" = NULL, "updatedAt" = ${now}
+      WHERE status = 'HELD' AND "heldUntil" < ${now}
+      RETURNING id, "screeningId", "seatId"
+    `);
   }
 
   findById(id: number): Promise<Reservation | null> {
