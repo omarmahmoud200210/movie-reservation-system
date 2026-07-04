@@ -8,6 +8,7 @@ import { AuthModule } from './auth/auth.module';
 import { MoviesModule } from './movies/movies.module';
 import { ScreeningsModule } from './screenings/screenings.module';
 import { ReservationsModule } from './reservations/reservations.module';
+import { GatewayModule } from './gateway/gateway.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { ReservationsModule } from './reservations/reservations.module';
     MoviesModule,
     ScreeningsModule,
     ReservationsModule,
+    GatewayModule,
   ],
 })
 export class AppModule {}
