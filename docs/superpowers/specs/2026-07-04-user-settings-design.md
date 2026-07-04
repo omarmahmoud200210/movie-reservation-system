@@ -23,6 +23,9 @@ primitives rather than inventing new ones.
 - `POST /users/me/email` — request an email change; sends an OTP to the *new*
   address.
 - `POST /users/me/email/confirm` — confirm the OTP, apply the email change.
+- `GET /users/me/email/pending` — whether an email change is awaiting
+  confirmation (backend support for a future client-side indicator; no UI
+  designed here).
 - `POST /users/me/password` — change password; revokes every other session.
 - New `UsersModule` (`src/users/`).
 
@@ -30,9 +33,11 @@ primitives rather than inventing new ones.
 - `GET /users/me` — not added. `GET /auth/me` (`auth.controller.ts:101`)
   already serves this; adding a second endpoint for the same data would be
   duplication with no benefit.
+  
 - Rate limiting on these new routes — that's Phase 8, which comes right after
   this ships (this phase exists specifically to give Phase 8's `PUT /user/settings`
   rule a real target).
+
 - Google-account password changes: `changePassword` requires a `password`
   hash to compare against (`bcrypt.compare(currentPassword, user.password)`).
   A Google-only account (`password: null`) has nothing to compare against —
@@ -69,7 +74,8 @@ src/users/
 ├── users.module.ts
 ├── users.controller.ts             # JwtAuthGuard; @CurrentUser() -> userId
 ├── users.service.ts                # updateName, requestEmailChange,
-│                                    # confirmEmailChange, changePassword
+│                                    # confirmEmailChange, getPendingEmailChange,
+│                                    # changePassword
 ├── users.repository.ts             # updateName, updateEmail, updatePassword
 │                                    # (thin Prisma wrappers, no business logic)
 └── dto/
@@ -141,6 +147,13 @@ async confirmEmailChange(userId: number, code: string): Promise<AuthUser> {
   return this.authService.getAuthUser(userId);
 }
 
+async getPendingEmailChange(
+  userId: number,
+): Promise<{ pending: true; newEmail: string } | { pending: false }> {
+  const newEmail = await this.redis.get(`pending_email:${userId}`);
+  return newEmail ? { pending: true, newEmail } : { pending: false };
+}
+
 async changePassword(
   userId: number,
   currentPassword: string,
@@ -208,6 +221,15 @@ Body: `RequestEmailChangeDto { newEmail, currentPassword }`. Response `200`:
 Body: `ConfirmEmailChangeDto { code }`. Response `200`: `AuthUser`, same shape
 and reasoning as `PATCH /users/me`.
 
+### `GET /users/me/email/pending` (auth)
+No body. Calls `UsersService.getPendingEmailChange`. Response `200`:
+`{ pending: true, newEmail: string } | { pending: false }`. Backend-only
+concern — lets a client (built later) know whether to keep showing a "verify
+your new email" indicator across page loads/new sessions, without the client
+having to remember state itself from the moment `POST /users/me/email`
+succeeded. Reads the same `pending_email:{userId}` Redis key
+`requestEmailChange`/`confirmEmailChange` already use — no new storage.
+
 ### `POST /users/me/password` (auth)
 Body: `ChangePasswordDto { currentPassword, newPassword }`. Response `200`:
 `{ message: 'Password changed' }`. Sets fresh auth cookies via
@@ -239,18 +261,20 @@ mailer, token service, and auth service.
   400; success → updates email, deletes the pending key, returns
   `authService.getAuthUser(userId)`'s result (same non-leak reasoning as
   `updateName`).
+- **`getPendingEmailChange`**: Redis key present → `{ pending: true, newEmail }`;
+  absent/expired → `{ pending: false }`.
 - **`changePassword`**: wrong current password → 401; success → hashes and
   stores the new password, calls `revokeAllSessions`, reissues auth cookies.
 - **`TokenService.revokeAllSessions`**: deletes all matching keys; no-ops
   cleanly when there are none.
-- **Controller tests**: `JwtAuthGuard` applied to all four routes; `userId`
+- **Controller tests**: `JwtAuthGuard` applied to all five routes; `userId`
   always sourced from `@CurrentUser()`, never from the body.
 
 ## Deferred-integration markers (in code)
 
 | Seam | Where the comment goes | Note |
 |---|---|---|
-| Rate limiting on all four routes | above each route in `users.controller.ts` | Resolved by Phase 8, which follows this phase directly — not a future/uncertain phase, so use the same `DEFERRED(phase-8)` convention already on `reservations.controller.ts:26` |
+| Rate limiting on all five routes | above each route in `users.controller.ts` | Resolved by Phase 8, which follows this phase directly — not a future/uncertain phase, so use the same `DEFERRED(phase-8)` convention already on `reservations.controller.ts:26` |
 
 ## Companion changes to `architecture.md`
 
@@ -264,7 +288,7 @@ three of its real routes).
 ## Follow-ups noted for later phases
 
 - Phase 8 (Rate Limiting): add `@RateLimit(...)`-equivalent guarding to all
-  four new routes, resolving the `DEFERRED(phase-8)` markers this phase
+  five new routes, resolving the `DEFERRED(phase-8)` markers this phase
   leaves. `architecture.md`'s `PUT /user/settings` rule most naturally maps to
-  `POST /users/me/password` (the most sensitive of the four) — confirm exact
-  mapping across all four routes when Phase 8 is brainstormed.
+  `POST /users/me/password` (the most sensitive of the five) — confirm exact
+  mapping across all five routes when Phase 8 is brainstormed.
