@@ -522,7 +522,7 @@ Lives inside the NestJS app using `@nestjs/schedule`.
 | Job | Schedule | Responsibility |
 |---|---|---|
 | `expireHolds` | Every 1 min | Find held_until < NOW() → release seat → publish to Pub/Sub |
-| `completeScreenings` | Every 15 min | Find screenings past starts_at + duration → mark completed | "ignore this"
+| `completeScreenings` | Every 15 min | Find screenings past starts_at + duration → mark completed |
 ```
 
 Replace it with:
