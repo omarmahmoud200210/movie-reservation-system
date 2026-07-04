@@ -225,8 +225,8 @@ describe('ReservationsService', () => {
     it('emits one reservation.cancelled per screening, grouping seat ids', async () => {
       mockReservationsRepo.releaseExpiredHolds.mockResolvedValue([
         { id: 100, screeningId: 3, seatId: 11 },
-        { id: 101, screeningId: 3, seatId: 12 },
         { id: 102, screeningId: 5, seatId: 20 },
+        { id: 101, screeningId: 3, seatId: 12 },
       ]);
 
       await service.expireHolds();
