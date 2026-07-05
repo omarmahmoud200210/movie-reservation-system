@@ -29,4 +29,28 @@ export class UsersService {
     await this.usersRepo.updateName(userId, name);
     return this.authService.getAuthUser(userId);
   }
+
+  async requestEmailChange(
+    userId: number,
+    newEmail: string,
+    currentPassword: string,
+  ): Promise<{ message: string }> {
+    const user = await this.usersRepo.findById(userId);
+    if (!user?.password) throw new UnauthorizedException('Invalid credentials');
+    const matches = await bcrypt.compare(currentPassword, user.password);
+    if (!matches) throw new UnauthorizedException('Invalid credentials');
+
+    const existing = await this.usersRepo.findByEmail(newEmail);
+    if (existing) throw new ConflictException('Email already registered');
+
+    await this.redis.set(
+      `pending_email:${userId}`,
+      newEmail,
+      'EX',
+      Number(process.env.OTP_TTL_SECONDS),
+    );
+    const code = await this.otp.issue(newEmail);
+    await this.mailer.sendOtpEmail(newEmail, code);
+    return { message: 'Verification code sent to new email' };
+  }
 }

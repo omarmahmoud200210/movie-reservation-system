@@ -72,4 +72,56 @@ describe('UsersService', () => {
       expect(result).toEqual(authUser);
     });
   });
+
+  describe('requestEmailChange', () => {
+    const user = { id: 1, password: 'hashed' };
+
+    it('throws 401 when the account has no password (Google-only)', async () => {
+      mockRepo.findById.mockResolvedValue({ ...user, password: null });
+
+      await expect(
+        service.requestEmailChange(1, 'new@example.com', 'current'),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(mockRepo.findByEmail).not.toHaveBeenCalled();
+    });
+
+    it('throws 401 when the current password is wrong', async () => {
+      mockRepo.findById.mockResolvedValue(user);
+      mockBcrypt.compare.mockResolvedValue(false as never);
+
+      await expect(
+        service.requestEmailChange(1, 'new@example.com', 'wrong'),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+
+    it('throws 409 when the new email is already registered', async () => {
+      mockRepo.findById.mockResolvedValue(user);
+      mockBcrypt.compare.mockResolvedValue(true as never);
+      mockRepo.findByEmail.mockResolvedValue({ id: 2 });
+
+      await expect(
+        service.requestEmailChange(1, 'taken@example.com', 'current'),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(mockRedis.set).not.toHaveBeenCalled();
+    });
+
+    it('on success, stores the pending email in redis and sends an OTP to the new address', async () => {
+      mockRepo.findById.mockResolvedValue(user);
+      mockBcrypt.compare.mockResolvedValue(true as never);
+      mockRepo.findByEmail.mockResolvedValue(null);
+      mockOtp.issue.mockResolvedValue('123456');
+
+      const result = await service.requestEmailChange(1, 'new@example.com', 'current');
+
+      expect(mockRedis.set).toHaveBeenCalledWith(
+        'pending_email:1',
+        'new@example.com',
+        'EX',
+        300,
+      );
+      expect(mockOtp.issue).toHaveBeenCalledWith('new@example.com');
+      expect(mockMailer.sendOtpEmail).toHaveBeenCalledWith('new@example.com', '123456');
+      expect(result).toEqual({ message: 'Verification code sent to new email' });
+    });
+  });
 });
