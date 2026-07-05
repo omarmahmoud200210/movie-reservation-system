@@ -124,4 +124,57 @@ describe('UsersService', () => {
       expect(result).toEqual({ message: 'Verification code sent to new email' });
     });
   });
+
+  describe('confirmEmailChange', () => {
+    it('throws 400 when there is no pending email change', async () => {
+      mockRedis.get.mockResolvedValue(null);
+
+      await expect(service.confirmEmailChange(1, '123456')).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      expect(mockOtp.verify).not.toHaveBeenCalled();
+    });
+
+    it('throws 400 when the code is invalid', async () => {
+      mockRedis.get.mockResolvedValue('new@example.com');
+      mockOtp.verify.mockResolvedValue(false);
+
+      await expect(service.confirmEmailChange(1, 'wrong')).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      expect(mockRepo.updateEmail).not.toHaveBeenCalled();
+    });
+
+    it('on success, updates the email, clears the pending key, and returns the fresh AuthUser', async () => {
+      mockRedis.get.mockResolvedValue('new@example.com');
+      mockOtp.verify.mockResolvedValue(true);
+      mockAuthService.getAuthUser.mockResolvedValue(authUser);
+
+      const result = await service.confirmEmailChange(1, '123456');
+
+      expect(mockOtp.verify).toHaveBeenCalledWith('new@example.com', '123456');
+      expect(mockRepo.updateEmail).toHaveBeenCalledWith(1, 'new@example.com');
+      expect(mockRedis.del).toHaveBeenCalledWith('pending_email:1');
+      expect(result).toEqual(authUser);
+    });
+  });
+
+  describe('getPendingEmailChange', () => {
+    it('returns pending: true with the new email when a key exists', async () => {
+      mockRedis.get.mockResolvedValue('new@example.com');
+
+      await expect(service.getPendingEmailChange(1)).resolves.toEqual({
+        pending: true,
+        newEmail: 'new@example.com',
+      });
+    });
+
+    it('returns pending: false when no key exists', async () => {
+      mockRedis.get.mockResolvedValue(null);
+
+      await expect(service.getPendingEmailChange(1)).resolves.toEqual({
+        pending: false,
+      });
+    });
+  });
 });

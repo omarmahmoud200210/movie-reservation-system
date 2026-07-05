@@ -53,4 +53,24 @@ export class UsersService {
     await this.mailer.sendOtpEmail(newEmail, code);
     return { message: 'Verification code sent to new email' };
   }
+
+  async confirmEmailChange(userId: number, code: string): Promise<AuthUser> {
+    const pendingEmail = await this.redis.get(`pending_email:${userId}`);
+    if (!pendingEmail) {
+      throw new BadRequestException('No pending email change or it expired');
+    }
+    const ok = await this.otp.verify(pendingEmail, code);
+    if (!ok) throw new BadRequestException('Invalid code');
+
+    await this.usersRepo.updateEmail(userId, pendingEmail);
+    await this.redis.del(`pending_email:${userId}`);
+    return this.authService.getAuthUser(userId);
+  }
+
+  async getPendingEmailChange(
+    userId: number,
+  ): Promise<{ pending: true; newEmail: string } | { pending: false }> {
+    const newEmail = await this.redis.get(`pending_email:${userId}`);
+    return newEmail ? { pending: true, newEmail } : { pending: false };
+  }
 }
