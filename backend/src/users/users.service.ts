@@ -73,4 +73,23 @@ export class UsersService {
     const newEmail = await this.redis.get(`pending_email:${userId}`);
     return newEmail ? { pending: true, newEmail } : { pending: false };
   }
+
+  async changePassword(
+    userId: number,
+    currentPassword: string,
+    newPassword: string,
+    res: Response,
+  ): Promise<void> {
+    const user = await this.usersRepo.findById(userId);
+    if (!user?.password) throw new UnauthorizedException('Invalid credentials');
+    const matches = await bcrypt.compare(currentPassword, user.password);
+    if (!matches) throw new UnauthorizedException('Invalid credentials');
+
+    const hash = await bcrypt.hash(newPassword, 10);
+    await this.usersRepo.updatePassword(userId, hash);
+
+    await this.tokenService.revokeAllSessions(userId);
+    const authUser = await this.authService.getAuthUser(userId);
+    await this.tokenService.issueAuthCookies(res, authUser);
+  }
 }

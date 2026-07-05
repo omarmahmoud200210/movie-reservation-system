@@ -177,4 +177,41 @@ describe('UsersService', () => {
       });
     });
   });
+
+  describe('changePassword', () => {
+    const user = { id: 1, password: 'hashed' };
+    const res = {} as never;
+
+    it('throws 401 when the account has no password (Google-only)', async () => {
+      mockRepo.findById.mockResolvedValue({ ...user, password: null });
+
+      await expect(
+        service.changePassword(1, 'current', 'newpassword', res),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+
+    it('throws 401 when the current password is wrong', async () => {
+      mockRepo.findById.mockResolvedValue(user);
+      mockBcrypt.compare.mockResolvedValue(false as never);
+
+      await expect(
+        service.changePassword(1, 'wrong', 'newpassword', res),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+      expect(mockRepo.updatePassword).not.toHaveBeenCalled();
+    });
+
+    it('on success, hashes+stores the new password, revokes all sessions, and reissues cookies', async () => {
+      mockRepo.findById.mockResolvedValue(user);
+      mockBcrypt.compare.mockResolvedValue(true as never);
+      mockBcrypt.hash.mockResolvedValue('new-hash' as never);
+      mockAuthService.getAuthUser.mockResolvedValue(authUser);
+
+      await service.changePassword(1, 'current', 'newpassword', res);
+
+      expect(mockBcrypt.hash).toHaveBeenCalledWith('newpassword', 10);
+      expect(mockRepo.updatePassword).toHaveBeenCalledWith(1, 'new-hash');
+      expect(mockTokenService.revokeAllSessions).toHaveBeenCalledWith(1);
+      expect(mockTokenService.issueAuthCookies).toHaveBeenCalledWith(res, authUser);
+    });
+  });
 });
