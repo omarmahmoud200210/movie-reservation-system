@@ -548,7 +548,7 @@ src/
 4. **Reservations (HTTP)** — reserve, cancel with `SELECT FOR UPDATE` ✅
 5. **WebSocket Gateway** — rooms, initial state, authentication ✅
 6. **Cron Jobs** — hold expiry ✅ (screening completion deferred, no current consumer; payment reconciliation deferred to phase 9, needs the Payments module)
-7. **Redis Pub/Sub bridge** — connect cron to gateway
+7. **Redis Pub/Sub bridge** — connect cron to gateway (Skipped)
 8. **Rate Limiting** — middleware + guard
 9. **Payment** — Stripe checkout, webhook handler, refund logic
 10. **Observability** — Prometheus metrics, Grafana dashboards
