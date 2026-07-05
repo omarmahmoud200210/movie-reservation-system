@@ -136,6 +136,19 @@ export class TokenService {
     res.clearCookie('access_token');
     res.clearCookie('refresh_token', { path: REFRESH_COOKIE_PATH });
   }
+
+  /**
+   * Revokes every refresh session for a user (e.g. on password change). Scoped
+   * to one user's keyspace, so KEYS is fine here — always a small, bounded set,
+   * not a whole-keyspace scan.
+   */
+  async revokeAllSessions(userId: number): Promise<void> {
+    const client = this.redis.getClient();
+    const keys = await client.keys(`refresh:${userId}:*`);
+    if (keys.length > 0) {
+      await client.del(...keys);
+    }
+  }
 }
 
 export type { AccessPayload, RefreshPayload };

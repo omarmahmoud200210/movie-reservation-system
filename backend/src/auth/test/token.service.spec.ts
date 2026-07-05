@@ -35,6 +35,7 @@ const mockRedis = {
   set: jest.fn(),
   get: jest.fn(),
   del: jest.fn(),
+  getClient: jest.fn(),
 };
 
 describe('TokenService', () => {
@@ -236,6 +237,36 @@ describe('TokenService', () => {
       expect(res.clearCookie).toHaveBeenCalledWith('refresh_token', {
         path: REFRESH_COOKIE_PATH,
       });
+    });
+  });
+
+  describe('revokeAllSessions', () => {
+    it('deletes every refresh key matching the user when keys exist', async () => {
+      const mockClient = {
+        keys: jest.fn().mockResolvedValue(['refresh:1:jti-a', 'refresh:1:jti-b']),
+        del: jest.fn(),
+      };
+      mockRedis.getClient.mockReturnValue(mockClient);
+
+      await service.revokeAllSessions(1);
+
+      expect(mockClient.keys).toHaveBeenCalledWith('refresh:1:*');
+      expect(mockClient.del).toHaveBeenCalledWith(
+        'refresh:1:jti-a',
+        'refresh:1:jti-b',
+      );
+    });
+
+    it('no-ops cleanly when there are no matching keys', async () => {
+      const mockClient = {
+        keys: jest.fn().mockResolvedValue([]),
+        del: jest.fn(),
+      };
+      mockRedis.getClient.mockReturnValue(mockClient);
+
+      await service.revokeAllSessions(1);
+
+      expect(mockClient.del).not.toHaveBeenCalled();
     });
   });
 });

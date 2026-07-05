@@ -27,5 +27,6 @@ import { MailerModule } from '../mailer/mailer.module';
     GoogleStrategy,
     GoogleLinkStrategy,
   ],
+  exports: [AuthService, OtpService, TokenService],
 })
 export class AuthModule {}
