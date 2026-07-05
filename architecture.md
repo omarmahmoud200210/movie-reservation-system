@@ -198,7 +198,7 @@ consumes, which is sufficient for a single-instance deployment today.
 | MoviesModule | GET /movies, GET /movies/:id, GET /movies/:id/screenings |
 | ScreeningsModule | GET /screenings/:id/seats |
 | ReservationsModule | POST /reservations, DELETE /reservations/:id, GET /reservations/me |
-| UsersModule | GET /users/me, PUT /users/settings |
+| UsersModule | PATCH /users/me, POST /users/me/email, POST /users/me/email/confirm, GET /users/me/email/pending, POST /users/me/password |
 
 ---
 
