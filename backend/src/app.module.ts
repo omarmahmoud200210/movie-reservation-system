@@ -10,6 +10,7 @@ import { MoviesModule } from './movies/movies.module';
 import { ScreeningsModule } from './screenings/screenings.module';
 import { ReservationsModule } from './reservations/reservations.module';
 import { GatewayModule } from './gateway/gateway.module';
+import { UsersModule } from './users/users.module';
 import { CronModule } from './cron/cron.module';
 
 @Module({
@@ -27,6 +28,7 @@ import { CronModule } from './cron/cron.module';
     MoviesModule,
     ScreeningsModule,
     ReservationsModule,
+    UsersModule,
     GatewayModule,
     CronModule,
   ],
