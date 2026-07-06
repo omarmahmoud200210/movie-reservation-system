@@ -2,6 +2,9 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { UsersController } from '../users.controller';
 import { UsersService } from '../users.service';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { RateLimitGuard } from '../../common/guards/rate-limit.guard';
+import { RATE_LIMIT_KEY } from '../../common/decorators/rate-limit.decorator';
+import RateLimiterService from '../../redis/rate-limiter.service';
 
 const mockService = {
   updateName: jest.fn(),
@@ -9,6 +12,10 @@ const mockService = {
   confirmEmailChange: jest.fn(),
   getPendingEmailChange: jest.fn(),
   changePassword: jest.fn(),
+};
+
+const mockRateLimiterService = {
+  rateLimiter: jest.fn().mockResolvedValue({ allowed: true, remaining: 2, resetAfterMs: 60000 }),
 };
 
 const GUARDS_METADATA = '__guards__';
@@ -23,7 +30,10 @@ describe('UsersController', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [UsersController],
-      providers: [{ provide: UsersService, useValue: mockService }],
+      providers: [
+        { provide: UsersService, useValue: mockService },
+        { provide: RateLimiterService, useValue: mockRateLimiterService },
+      ],
     }).compile();
 
     controller = module.get<UsersController>(UsersController);
@@ -88,9 +98,51 @@ describe('UsersController', () => {
   });
 
   describe('guard wiring (class-level)', () => {
-    it('guards the whole controller with JwtAuthGuard', () => {
+    it('guards the whole controller with JwtAuthGuard and RateLimitGuard', () => {
       const guards = Reflect.getMetadata(GUARDS_METADATA, UsersController);
-      expect(guards).toEqual([JwtAuthGuard]);
+      expect(guards).toEqual([JwtAuthGuard, RateLimitGuard]);
+    });
+  });
+
+  describe('rate limit wiring (per-route)', () => {
+    it('updateName has users:name rate limit metadata', () => {
+      const meta = Reflect.getMetadata(
+        RATE_LIMIT_KEY,
+        UsersController.prototype.updateName,
+      );
+      expect(meta).toEqual({ points: 10, duration: 3_600_000, key: 'users:name' });
+    });
+
+    it('requestEmailChange has users:email-request rate limit metadata', () => {
+      const meta = Reflect.getMetadata(
+        RATE_LIMIT_KEY,
+        UsersController.prototype.requestEmailChange,
+      );
+      expect(meta).toEqual({ points: 10, duration: 3_600_000, key: 'users:email-request' });
+    });
+
+    it('confirmEmailChange has users:email-confirm rate limit metadata', () => {
+      const meta = Reflect.getMetadata(
+        RATE_LIMIT_KEY,
+        UsersController.prototype.confirmEmailChange,
+      );
+      expect(meta).toEqual({ points: 10, duration: 3_600_000, key: 'users:email-confirm' });
+    });
+
+    it('getPendingEmailChange has users:email-pending rate limit metadata', () => {
+      const meta = Reflect.getMetadata(
+        RATE_LIMIT_KEY,
+        UsersController.prototype.getPendingEmailChange,
+      );
+      expect(meta).toEqual({ points: 10, duration: 3_600_000, key: 'users:email-pending' });
+    });
+
+    it('changePassword has users:password rate limit metadata', () => {
+      const meta = Reflect.getMetadata(
+        RATE_LIMIT_KEY,
+        UsersController.prototype.changePassword,
+      );
+      expect(meta).toEqual({ points: 10, duration: 3_600_000, key: 'users:password' });
     });
   });
 });

@@ -11,6 +11,8 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RateLimitGuard } from '../common/guards/rate-limit.guard';
+import { RateLimit } from '../common/decorators/rate-limit.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthUser } from '../auth/token.service';
 import { UsersService } from './users.service';
@@ -24,17 +26,17 @@ import { ChangePasswordDto } from './dto/change-password.dto';
  * the JWT (`@CurrentUser()`), never from the request body.
  */
 @Controller('users')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, RateLimitGuard)
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  // DEFERRED(phase-8): per-user rate limit on this route.
+  @RateLimit({ points: 10, duration: 3_600_000, key: 'users:name' })
   @Patch('me')
   updateName(@CurrentUser() user: AuthUser, @Body() dto: UpdateNameDto) {
     return this.usersService.updateName(user.id, dto.name);
   }
 
-  // DEFERRED(phase-8): per-user rate limit on this route.
+  @RateLimit({ points: 10, duration: 3_600_000, key: 'users:email-request' })
   @Post('me/email')
   @HttpCode(HttpStatus.OK)
   requestEmailChange(
@@ -48,7 +50,7 @@ export class UsersController {
     );
   }
 
-  // DEFERRED(phase-8): per-user rate limit on this route.
+  @RateLimit({ points: 10, duration: 3_600_000, key: 'users:email-confirm' })
   @Post('me/email/confirm')
   @HttpCode(HttpStatus.OK)
   confirmEmailChange(
@@ -58,16 +60,13 @@ export class UsersController {
     return this.usersService.confirmEmailChange(user.id, dto.code);
   }
 
-  // DEFERRED(phase-8): per-user rate limit on this route.
+  @RateLimit({ points: 10, duration: 3_600_000, key: 'users:email-pending' })
   @Get('me/email/pending')
   getPendingEmailChange(@CurrentUser() user: AuthUser) {
     return this.usersService.getPendingEmailChange(user.id);
   }
 
-  // DEFERRED(phase-8): per-user rate limit on this route (maps to
-  // architecture.md's `PUT /user/settings` rule — the most sensitive of the
-  // five new routes; confirm exact mapping across all five when Phase 8 is
-  // brainstormed).
+  @RateLimit({ points: 10, duration: 3_600_000, key: 'users:password' })
   @Post('me/password')
   @HttpCode(HttpStatus.OK)
   async changePassword(
