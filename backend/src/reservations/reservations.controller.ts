@@ -13,6 +13,8 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { AuthUser } from '../auth/token.service';
 import { ReservationsService } from './reservations.service';
 import { CreateReservationDto } from './dto/create-reservation.dto';
+import { RateLimitGuard } from '../common/guards/rate-limit.guard';
+import { RateLimit } from '../common/decorators/rate-limit.decorator';
 
 /**
  * Authenticated seat reservations. The caller identity always comes from the
@@ -23,7 +25,8 @@ import { CreateReservationDto } from './dto/create-reservation.dto';
 export class ReservationsController {
   constructor(private readonly reservationsService: ReservationsService) {}
 
-  // DEFERRED(phase-8): per-user rate limit (3 / 1 min) on this route.
+  @UseGuards(RateLimitGuard)
+  @RateLimit({ points: 3, duration: 60_000, key: 'reservations:create' })
   @Post()
   reserve(@CurrentUser() user: AuthUser, @Body() dto: CreateReservationDto) {
     return this.reservationsService.reserve(user.id, dto);
