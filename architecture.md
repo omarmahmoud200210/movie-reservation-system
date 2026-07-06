@@ -163,6 +163,13 @@ rate_limit:ip:{ip_address}:{endpoint}
 rate_limit:user:{user_id}:{endpoint}
 ```
 
+**Known risk — `trust proxy`:** the IP middleware keys on Express's `req.ip`
+directly. Behind a reverse proxy or load balancer, `req.ip` resolves to the
+proxy's address unless Express's `trust proxy` setting is configured
+(`app.set('trust proxy', ...)` in `main.ts`), which collapses every client
+into one shared bucket. Must be set correctly before this deploys behind
+any proxy/LB.
+
 ---
 
 ### 6. Scheduled Jobs (Cron Service)
@@ -264,20 +271,25 @@ Client (Browser / Mobile)
 
 **Payment Status Enum**
 ```
-pending → in_progress → succeeded
+pending → in_progress → succeeded → refunded   (cancellation & refund flow)
                      → declined
                      → timed_out → [cron reconciliation] → succeeded
                                                          → failed
 ```
 
+**Payment ↔ Reservation grouping:** one `Payment` can cover multiple seats. A single `reserve()` call
+creates one `Reservation` row per seat, and a real booking pays for all of them as one Stripe Checkout
+Session — so the FK lives on `Reservation` (`reservation.payment_id → payments.id`, nullable until
+checkout starts), not the other way around. A `HELD` reservation with no `payment_id` hasn't started
+checkout yet; every reservation sharing a `payment_id` is one booking group, cancelled/refunded together.
+
 **`payments` Table**
 ```sql
 id                  uuid primary key
-reservation_id      FK → reservations
 user_id             FK → users
 amount              integer           -- in cents/piastres, NEVER floats
 currency            varchar           -- 'usd', 'egp'
-status              enum              -- pending, in_progress, succeeded, declined, timed_out, failed
+status              enum              -- pending, in_progress, succeeded, declined, timed_out, failed, refunded
 stripe_payment_id   varchar
 stripe_session_id   varchar
 stripe_event_id     varchar UNIQUE    -- idempotency key against duplicate webhooks
@@ -293,7 +305,7 @@ updated_at          timestamp
 **Cancellation & Refund Flow**
 ```
 User cancels → DB transaction:
-  reservation.status = 'cancelled'
+  reservation.status = 'cancelled'  -- every reservation sharing this payment_id
   payment.refund_id = stripe_refund_id
   payment.refunded_at = NOW()
 → Stripe.refunds.create({ payment_intent_id, amount: calculated })
@@ -301,19 +313,20 @@ User cancels → DB transaction:
 → emit seat:cancelled to WebSocket room
 ```
 
-**Refund Policy Table**
+**Refund Policy Table (ranges, not a single threshold)**
 ```sql
 CREATE TABLE refund_policies (
   id              uuid primary key,
-  hours_before    integer,   -- hours before screening
+  hours_from      integer,   -- inclusive lower bound, hours before screening
+  hours_to        integer,   -- exclusive upper bound, hours before screening
   refund_percent  integer    -- 100, 50, 0
 );
 
--- Default policy
+-- Default policy — ranges are [hours_from, hours_to); 100000 stands in for "no upper bound"
 INSERT INTO refund_policies VALUES
-  (gen_random_uuid(), 48, 100),  -- >48hrs  → full refund
-  (gen_random_uuid(), 24, 50),   -- 24-48hrs → 50% refund
-  (gen_random_uuid(), 0,  0);    -- <24hrs  → no refund
+  (gen_random_uuid(), 48, 100000, 100),  -- >=48hrs  → full refund
+  (gen_random_uuid(), 24, 48,     50),   -- 24-48hrs → 50% refund
+  (gen_random_uuid(), 0,  24,     0);    -- <24hrs   → no refund
 ```
 
 **Webhook Security (no rate limiting — signature verification instead)**
@@ -338,6 +351,30 @@ Every 5 min → find payments where status = 'timed_out' AND created_at < NOW() 
 → call Stripe API to check actual status
 → update DB accordingly → trigger refund or confirmation flow
 ```
+
+**Payment Abuse Lockout**
+
+Repeated failed payments (declined cards, failed charges) are a fraud/abuse
+signal Stripe itself doesn't throttle — this guards against it separately
+from the rate-limiting layer (§5), which throttles by *call volume*, not by
+*failure outcome*.
+
+- **Trigger:** a payment resolves to `declined` or `failed`.
+- **Counting:** each failure is recorded in Redis under
+  `payment_failures:user:{user_id}` (sorted-set-by-timestamp, same shape as
+  the rate limiter's window) — 3 failures within a rolling 24h window trips
+  the lockout.
+- **Lockout key:** `payment_lockout:user:{user_id}`, TTL 30 min. Presence of
+  the key *is* the lockout check — no separate counter read once it's set.
+- **Enforcement:** checked at `ReservationsService.reserve()` — a locked-out
+  user cannot create a **new reservation at all** (not just retry payment)
+  until the 30 min TTL expires. Existing HELD reservations are unaffected;
+  the hold-expiry cron still reclaims them normally on timeout.
+- **Why not reuse `RateLimiterService`:** it records on *every* call and
+  blocks the *same* action it counts. This needs to record only on failure
+  and block a *different* action (reservation creation) than the one that
+  produced the failure (payment submission) — a distinct small Redis check,
+  not a call into the rate limiter.
 
 ---
 
@@ -549,7 +586,7 @@ src/
 5. **WebSocket Gateway** — rooms, initial state, authentication ✅
 6. **Cron Jobs** — hold expiry ✅ (screening completion deferred, no current consumer; payment reconciliation deferred to phase 9, needs the Payments module)
 7. **Redis Pub/Sub bridge** — connect cron to gateway (Skipped)
-8. **Rate Limiting** — middleware + guard
+8. **Rate Limiting** — middleware + guard ✅
 9. **Payment** — Stripe checkout, webhook handler, refund logic
 10. **Observability** — Prometheus metrics, Grafana dashboards
 11. **Load Testing** — Artillery scenarios, tune under Grafana observation
