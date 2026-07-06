@@ -13,6 +13,35 @@ export interface RateLimiterResult {
   resetAfterMs: number;
 }
 
+const RATE_LIMITER_SCRIPT = `
+local key = KEYS[1]
+local now = tonumber(ARGV[1])
+local windowSize = tonumber(ARGV[2])
+local maxRequests = tonumber(ARGV[3])
+local member = ARGV[4]
+
+local windowStart = now - windowSize
+
+redis.call('ZREMRANGEBYSCORE', key, 0, windowStart)
+
+local count = redis.call('ZCARD', key)
+
+if count < maxRequests then
+  redis.call('ZADD', key, now, member)
+  redis.call('PEXPIRE', key, windowSize)
+  local remaining = maxRequests - count - 1
+  return {1, remaining, windowSize}
+else
+  local oldest = redis.call('ZRANGE', key, 0, 0, 'WITHSCORES')
+  local resetAfterMs = 0
+  if #oldest >= 2 then
+    resetAfterMs = (tonumber(oldest[2]) + windowSize) - now
+    if resetAfterMs < 0 then resetAfterMs = 0 end
+  end
+  return {0, 0, resetAfterMs}
+end
+`;
+
 @Injectable()
 export default class RateLimiterService {
   constructor(private readonly redis: RedisCache) {}
@@ -27,38 +56,24 @@ export default class RateLimiterService {
   ): Promise<RateLimiterResult> {
     const client = this.getClient();
     const timestamp = Date.now();
-    const windowStart = timestamp - config.windowSize;
+    const member = randomUUID();
 
-    const multi = await client
-      .multi()
-      .zremrangebyscore(key, 0, windowStart)
-      .zcard(key)
-      .zadd(key, timestamp, randomUUID())
-      .pexpire(key, config.windowSize)
-      .exec();
+    const result = await client.eval(
+      RATE_LIMITER_SCRIPT,
+      1,
+      key,
+      timestamp,
+      config.windowSize,
+      config.maxRequests,
+      member,
+    );
 
-    if (!Array.isArray(multi)) {
-      throw new Error('Failed to execute Redis pipeline');
-    }
-
-    const count = Number(multi[1][1]);
-    const allowed = count < config.maxRequests;
-    const remaining = Math.max(0, config.maxRequests - count - 1);
-
-    // TODO: Get an accurate retry in ms
-
-    if (!allowed) {
-      return {
-        allowed: false,
-        remaining: 0,
-        resetAfterMs: config.windowSize,
-      };
-    }
+    const [allowedFlag, remaining, resetAfterMs] = result as [number, number, number];
 
     return {
-      allowed: true,
-      remaining: remaining,
-      resetAfterMs: config.windowSize,
+      allowed: allowedFlag === 1,
+      remaining,
+      resetAfterMs,
     };
   }
 }
