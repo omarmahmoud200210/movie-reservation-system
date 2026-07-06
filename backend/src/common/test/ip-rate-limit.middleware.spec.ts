@@ -4,20 +4,26 @@ import { Request, Response, NextFunction } from 'express';
 import { IpRateLimitMiddleware } from '../middleware/ip-rate-limit.middleware';
 import RateLimiterService from '../../redis/rate-limiter.service';
 
+function buildReq(method: string, path: string, ip = ''): Request {
+  return { method, path, ip } as unknown as Request;
+}
+
+function buildRes() {
+  return {
+    setHeader: jest.fn(),
+    status: jest.fn().mockReturnThis(),
+    json: jest.fn(),
+  };
+}
+
 describe('IpRateLimitMiddleware', () => {
   let middleware: IpRateLimitMiddleware;
   let mockRateLimiterService: jest.Mocked<RateLimiterService>;
-  let mockReq: Partial<Request>;
-  let mockRes: Partial<Record<'setHeader' | 'status' | 'json', jest.Mock>>;
+  let mockRes: ReturnType<typeof buildRes>;
   let mockNext: jest.Mock;
 
   beforeEach(async () => {
-    mockReq = { method: '', path: '', ip: '' };
-    mockRes = {
-      setHeader: jest.fn(),
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn(),
-    };
+    mockRes = buildRes();
     mockNext = jest.fn();
 
     const module: TestingModule = await Test.createTestingModule({
@@ -28,7 +34,9 @@ describe('IpRateLimitMiddleware', () => {
     }).compile();
 
     middleware = module.get<IpRateLimitMiddleware>(IpRateLimitMiddleware);
-    mockRateLimiterService = module.get(RateLimiterService) as jest.Mocked<RateLimiterService>;
+    mockRateLimiterService = module.get(
+      RateLimiterService,
+    ) as jest.Mocked<RateLimiterService>;
   });
 
   afterEach(() => {
@@ -36,26 +44,31 @@ describe('IpRateLimitMiddleware', () => {
   });
 
   it('calls next() without calling rateLimiter for an unmatched route', async () => {
-    mockReq.method = 'GET';
-    mockReq.path = '/auth/login';
+    const req = buildReq('GET', '/auth/login');
 
-    await middleware.use(mockReq as Request, mockRes as Response, mockNext);
+    await middleware.use(
+      req,
+      mockRes as unknown as Response,
+      mockNext as unknown as NextFunction,
+    );
 
     expect(mockRateLimiterService.rateLimiter).not.toHaveBeenCalled();
     expect(mockNext).toHaveBeenCalledTimes(1);
   });
 
   it('allows POST /auth/login within limits', async () => {
-    mockReq.method = 'POST';
-    mockReq.path = '/auth/login';
-    mockReq.ip = '1.2.3.4';
+    const req = buildReq('POST', '/auth/login', '1.2.3.4');
     mockRateLimiterService.rateLimiter.mockResolvedValue({
       allowed: true,
       remaining: 4,
       resetAfterMs: 800_000,
     });
 
-    await middleware.use(mockReq as Request, mockRes as Response, mockNext);
+    await middleware.use(
+      req,
+      mockRes as unknown as Response,
+      mockNext as unknown as NextFunction,
+    );
 
     expect(mockRateLimiterService.rateLimiter).toHaveBeenCalledWith(
       'rate_limit:ip:1.2.3.4:auth:login',
@@ -66,16 +79,18 @@ describe('IpRateLimitMiddleware', () => {
   });
 
   it('allows GET /movies within limits', async () => {
-    mockReq.method = 'GET';
-    mockReq.path = '/movies';
-    mockReq.ip = '1.2.3.4';
+    const req = buildReq('GET', '/movies', '1.2.3.4');
     mockRateLimiterService.rateLimiter.mockResolvedValue({
       allowed: true,
       remaining: 59,
       resetAfterMs: 55_000,
     });
 
-    await middleware.use(mockReq as Request, mockRes as Response, mockNext);
+    await middleware.use(
+      req,
+      mockRes as unknown as Response,
+      mockNext as unknown as NextFunction,
+    );
 
     expect(mockRateLimiterService.rateLimiter).toHaveBeenCalledWith(
       'rate_limit:ip:1.2.3.4:movies:browse',
@@ -85,16 +100,18 @@ describe('IpRateLimitMiddleware', () => {
   });
 
   it('blocks and returns 429 when rate limited', async () => {
-    mockReq.method = 'POST';
-    mockReq.path = '/auth/login';
-    mockReq.ip = '1.2.3.4';
+    const req = buildReq('POST', '/auth/login', '1.2.3.4');
     mockRateLimiterService.rateLimiter.mockResolvedValue({
       allowed: false,
       remaining: 0,
       resetAfterMs: 12_500,
     });
 
-    await middleware.use(mockReq as Request, mockRes as Response, mockNext);
+    await middleware.use(
+      req,
+      mockRes as unknown as Response,
+      mockNext as unknown as NextFunction,
+    );
 
     expect(mockRes.setHeader).toHaveBeenCalledWith('Retry-After', 13);
     expect(mockRes.status).toHaveBeenCalledWith(429);
