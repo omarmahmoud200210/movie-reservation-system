@@ -1,4 +1,5 @@
-import { Module } from '@nestjs/common';
+import { Module, MiddlewareConsumer, NestModule, RequestMethod } from '@nestjs/common';
+import { IpRateLimitMiddleware } from './common/middleware/ip-rate-limit.middleware';
 import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -33,4 +34,11 @@ import { CronModule } from './cron/cron.module';
     CronModule,
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(IpRateLimitMiddleware).forRoutes(
+      { path: 'auth/login', method: RequestMethod.POST },
+      { path: 'movies', method: RequestMethod.GET },
+    );
+  }
+}
