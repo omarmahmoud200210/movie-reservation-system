@@ -13,22 +13,24 @@ Designed for scale: Redis Pub/Sub bridge, dual Redis instances, WebSocket rooms 
 
 **Entities & Relationships**
 
-| Entity | Key Fields | Notes |
-|---|---|---|
-| `users` | id, email, password_hash, created_at | email has UNIQUE constraint + index |
-| `movies` | id, title, description, duration_mins, poster_url | rarely changes — cache aggressively |
-| `halls` | id, name, capacity | static data |
-| `seats` | id, hall_id, row, number | belongs to hall, not screening |
-| `screenings` | id, movie_id, hall_id, starts_at, status | status: scheduled / completed / cancelled |
-| `reservations` | id, user_id, seat_id, screening_id, status, held_until | core join entity |
+| Entity         | Key Fields                                             | Notes                                     |
+| -------------- | ------------------------------------------------------ | ----------------------------------------- |
+| `users`        | id, email, password_hash, created_at                   | email has UNIQUE constraint + index       |
+| `movies`       | id, title, description, duration_mins, poster_url      | rarely changes — cache aggressively       |
+| `halls`        | id, name, capacity                                     | static data                               |
+| `seats`        | id, hall_id, row, number                               | belongs to hall, not screening            |
+| `screenings`   | id, movie_id, hall_id, starts_at, status               | status: scheduled / completed / cancelled |
+| `reservations` | id, user_id, seat_id, screening_id, status, held_until | core join entity                          |
 
 **Reservation Status Enum**
+
 ```
 pending → held → confirmed
                 → cancelled
 ```
 
 **Critical Indexes**
+
 ```sql
 -- Authentication
 CREATE UNIQUE INDEX idx_users_email ON users(email);
@@ -49,6 +51,7 @@ CREATE UNIQUE INDEX idx_no_double_booking
 ```
 
 **Concurrency Strategy**
+
 - Isolation level: Repeatable Read
 - Locking: `SELECT FOR UPDATE` on seat row at reservation time
 - Flow: read seat status (locked) → check available → insert reservation → commit
@@ -57,11 +60,11 @@ CREATE UNIQUE INDEX idx_no_double_booking
 
 ### 2. Caching Layer (Redis Instance 1)
 
-| Cache Key | Value | TTL | Invalidation |
-|---|---|---|---|
-| `movie:{id}` | Movie details JSON | 1 hour | On admin update |
-| `seat_map:screening:{id}` | Array of { seat_id, status } | 5 min (cold) / no cache (active) | On every reservation event |
-| `reservation_history:user:{id}` | Array of reservations | 30 min | On reserve / cancel |
+| Cache Key                       | Value                        | TTL                              | Invalidation               |
+| ------------------------------- | ---------------------------- | -------------------------------- | -------------------------- |
+| `movie:{id}`                    | Movie details JSON           | 1 hour                           | On admin update            |
+| `seat_map:screening:{id}`       | Array of { seat_id, status } | 5 min (cold) / no cache (active) | On every reservation event |
+| `reservation_history:user:{id}` | Array of reservations        | 30 min                           | On reserve / cancel        |
 
 **Active vs Cold Screening Rule**  
 A screening is "active" if `starts_at` is within the next 2 hours.  
@@ -86,12 +89,12 @@ per-holder targeting only.)
 
 **Event Contract**
 
-| Event | Direction | Payload |
-|---|---|---|
-| `join:screening` | Client → Server | `{ screening_id }`, ack response: `{ ok: true, seats, summary }` or `{ ok: false, error }` |
-| `seat:reserved` | Server → Room | `{ screening_id, seat_ids, status: 'HELD' }` |
-| `seat:cancelled` | Server → Room | `{ screening_id, seat_ids, status: 'AVAILABLE' }` |
-| `screening:summary` | Server → Room | `{ screening_id, capacity, held, booked, available, reserved }` |
+| Event               | Direction       | Payload                                                                                    |
+| ------------------- | --------------- | ------------------------------------------------------------------------------------------ |
+| `join:screening`    | Client → Server | `{ screening_id }`, ack response: `{ ok: true, seats, summary }` or `{ ok: false, error }` |
+| `seat:reserved`     | Server → Room   | `{ screening_id, seat_ids, status: 'HELD' }`                                               |
+| `seat:cancelled`    | Server → Room   | `{ screening_id, seat_ids, status: 'AVAILABLE' }`                                          |
+| `screening:summary` | Server → Room   | `{ screening_id, capacity, held, booked, available, reserved }`                            |
 
 `join:screening` returns the initial seat map + summary via its **ack
 callback**, tying the response to that specific request — no separate
@@ -118,12 +121,13 @@ recover.
 
 **Channels**
 
-| Channel | Publisher | Subscriber | Payload |
-|---|---|---|---|
-| `seat:hold_expired` | Cron Service | WS Gateway | `{ seat_id, screening_id, user_socket_id }` |
-| `seat:status_changed` | Reservation Service | WS Gateway | `{ seat_id, screening_id, status }` |
+| Channel               | Publisher           | Subscriber | Payload                                     |
+| --------------------- | ------------------- | ---------- | ------------------------------------------- |
+| `seat:hold_expired`   | Cron Service        | WS Gateway | `{ seat_id, screening_id, user_socket_id }` |
+| `seat:status_changed` | Reservation Service | WS Gateway | `{ seat_id, screening_id, status }`         |
 
 **Flow**
+
 ```
 CronService (every 1 min)
   → finds holds where held_until < NOW() and status = 'held'
@@ -143,21 +147,22 @@ WS Gateway (subscribed)
 
 **Two-layer approach using Redis Instance 1**
 
-| Layer | Limits by | Implementation |
-|---|---|---|
-| Middleware | IP address | Runs before NestJS routing — blocks anonymous abuse |
-| Guard | User ID | Runs after JWT validation — blocks authenticated abuse |
+| Layer      | Limits by  | Implementation                                         |
+| ---------- | ---------- | ------------------------------------------------------ |
+| Middleware | IP address | Runs before NestJS routing — blocks anonymous abuse    |
+| Guard      | User ID    | Runs after JWT validation — blocks authenticated abuse |
 
 **Rate Limit Rules**
 
-| Endpoint | Limit | Window |
-|---|---|---|
-| `POST /auth/login` | 5 attempts | 15 min |
-| `POST /reservations` | 3 attempts | 1 min |
-| `PUT /user/settings` | 10 updates | 1 hour |
-| `GET /movies` | 60 requests | 1 min |
+| Endpoint             | Limit       | Window |
+| -------------------- | ----------- | ------ |
+| `POST /auth/login`   | 5 attempts  | 15 min |
+| `POST /reservations` | 3 attempts  | 1 min  |
+| `PUT /user/settings` | 10 updates  | 1 hour |
+| `GET /movies`        | 60 requests | 1 min  |
 
 **Redis Key Pattern**
+
 ```
 rate_limit:ip:{ip_address}:{endpoint}
 rate_limit:user:{user_id}:{endpoint}
@@ -178,8 +183,8 @@ Lives inside the NestJS app using `@nestjs/schedule`. Each job is a thin
 `@Cron`-decorated trigger (`src/cron/`) into an existing domain service — no
 business logic lives in the cron module itself.
 
-| Job | Schedule | Responsibility |
-|---|---|---|
+| Job           | Schedule    | Responsibility                                                                                                                                                                                                                             |
+| ------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `expireHolds` | Every 1 min | Atomically release HELD reservations whose `heldUntil` has passed, grouped by screening, emitting the existing `reservation.cancelled` event per group (drives cache invalidation and the WebSocket broadcast for free — no new listener). |
 
 `completeScreenings` is intentionally not built: no code in this codebase
@@ -199,13 +204,13 @@ consumes, which is sufficient for a single-instance deployment today.
 
 **Modules**
 
-| Module | Endpoints |
-|---|---|
-| AuthModule | POST /auth/register, POST /auth/login, POST /auth/logout |
-| MoviesModule | GET /movies, GET /movies/:id, GET /movies/:id/screenings |
-| ScreeningsModule | GET /screenings/:id/seats |
-| ReservationsModule | POST /reservations, DELETE /reservations/:id, GET /reservations/me |
-| UsersModule | PATCH /users/me, POST /users/me/email, POST /users/me/email/confirm, GET /users/me/email/pending, POST /users/me/password |
+| Module             | Endpoints                                                                                                                 |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| AuthModule         | POST /auth/register, POST /auth/login, POST /auth/logout                                                                  |
+| MoviesModule       | GET /movies, GET /movies/:id, GET /movies/:id/screenings                                                                  |
+| ScreeningsModule   | GET /screenings/:id/seats                                                                                                 |
+| ReservationsModule | POST /reservations, DELETE /reservations/:id, GET /reservations/me                                                        |
+| UsersModule        | PATCH /users/me, POST /users/me/email, POST /users/me/email/confirm, GET /users/me/email/pending, POST /users/me/password |
 
 ---
 
@@ -251,17 +256,17 @@ Client (Browser / Mobile)
 
 ## Tech Stack Summary
 
-| Layer | Technology |
-|---|---|
-| Runtime | Node.js + NestJS |
-| Database | PostgreSQL + Prisma |
-| Cache | Redis (ioredis) |
-| Pub/Sub | Redis (separate instance) |
-| Real-time | Socket.io (WSS) |
-| Scheduler | @nestjs/schedule |
-| Auth | JWT + bcrypt |
+| Layer         | Technology                        |
+| ------------- | --------------------------------- |
+| Runtime       | Node.js + NestJS                  |
+| Database      | PostgreSQL + Prisma               |
+| Cache         | Redis (ioredis)                   |
+| Pub/Sub       | Redis (separate instance)         |
+| Real-time     | Socket.io (WSS)                   |
+| Scheduler     | @nestjs/schedule                  |
+| Auth          | JWT + bcrypt                      |
 | Rate Limiting | Custom Middleware + Guard + Redis |
-| Reverse Proxy | Nginx |
+| Reverse Proxy | Nginx                             |
 
 ---
 
@@ -270,26 +275,23 @@ Client (Browser / Mobile)
 ### 8. Payment Layer (Stripe)
 
 **Payment Status Enum**
+
 ```
-pending → in_progress → succeeded → refunded   (cancellation & refund flow)
+pending → in_progress → succeeded
                      → declined
                      → timed_out → [cron reconciliation] → succeeded
                                                          → failed
 ```
 
-**Payment ↔ Reservation grouping:** one `Payment` can cover multiple seats. A single `reserve()` call
-creates one `Reservation` row per seat, and a real booking pays for all of them as one Stripe Checkout
-Session — so the FK lives on `Reservation` (`reservation.payment_id → payments.id`, nullable until
-checkout starts), not the other way around. A `HELD` reservation with no `payment_id` hasn't started
-checkout yet; every reservation sharing a `payment_id` is one booking group, cancelled/refunded together.
-
 **`payments` Table**
+
 ```sql
 id                  uuid primary key
+reservation_id      FK → reservations
 user_id             FK → users
 amount              integer           -- in cents/piastres, NEVER floats
 currency            varchar           -- 'usd', 'egp'
-status              enum              -- pending, in_progress, succeeded, declined, timed_out, failed, refunded
+status              enum              -- pending, in_progress, succeeded, declined, timed_out, failed
 stripe_payment_id   varchar
 stripe_session_id   varchar
 stripe_event_id     varchar UNIQUE    -- idempotency key against duplicate webhooks
@@ -303,9 +305,10 @@ updated_at          timestamp
 ```
 
 **Cancellation & Refund Flow**
+
 ```
 User cancels → DB transaction:
-  reservation.status = 'cancelled'  -- every reservation sharing this payment_id
+  reservation.status = 'cancelled'
   payment.refund_id = stripe_refund_id
   payment.refunded_at = NOW()
 → Stripe.refunds.create({ payment_intent_id, amount: calculated })
@@ -313,23 +316,24 @@ User cancels → DB transaction:
 → emit seat:cancelled to WebSocket room
 ```
 
-**Refund Policy Table (ranges, not a single threshold)**
+**Refund Policy Table**
+
 ```sql
 CREATE TABLE refund_policies (
   id              uuid primary key,
-  hours_from      integer,   -- inclusive lower bound, hours before screening
-  hours_to        integer,   -- exclusive upper bound, hours before screening
+  hours_before    integer,   -- hours before screening
   refund_percent  integer    -- 100, 50, 0
 );
 
--- Default policy — ranges are [hours_from, hours_to); 100000 stands in for "no upper bound"
+-- Default policy
 INSERT INTO refund_policies VALUES
-  (gen_random_uuid(), 48, 100000, 100),  -- >=48hrs  → full refund
-  (gen_random_uuid(), 24, 48,     50),   -- 24-48hrs → 50% refund
-  (gen_random_uuid(), 0,  24,     0);    -- <24hrs   → no refund
+  (gen_random_uuid(), 48, 100),  -- >48hrs  → full refund
+  (gen_random_uuid(), 24, 50),   -- 24-48hrs → 50% refund
+  (gen_random_uuid(), 0,  0);    -- <24hrs  → no refund
 ```
 
 **Webhook Security (no rate limiting — signature verification instead)**
+
 ```
 POST /payments/webhook
   → 1. Stripe signature verification   (stripe.webhooks.constructEvent)
@@ -338,6 +342,7 @@ POST /payments/webhook
 ```
 
 **Payment Confirmation Flow (success page)**
+
 ```
 User lands on /reservations/success?session_id=...
 → frontend shows "confirming your booking..." spinner
@@ -346,35 +351,12 @@ User lands on /reservations/success?session_id=...
 ```
 
 **Cron: Payment Reconciliation**
+
 ```
 Every 5 min → find payments where status = 'timed_out' AND created_at < NOW() - 10min
 → call Stripe API to check actual status
 → update DB accordingly → trigger refund or confirmation flow
 ```
-
-**Payment Abuse Lockout**
-
-Repeated failed payments (declined cards, failed charges) are a fraud/abuse
-signal Stripe itself doesn't throttle — this guards against it separately
-from the rate-limiting layer (§5), which throttles by *call volume*, not by
-*failure outcome*.
-
-- **Trigger:** a payment resolves to `declined` or `failed`.
-- **Counting:** each failure is recorded in Redis under
-  `payment_failures:user:{user_id}` (sorted-set-by-timestamp, same shape as
-  the rate limiter's window) — 3 failures within a rolling 24h window trips
-  the lockout.
-- **Lockout key:** `payment_lockout:user:{user_id}`, TTL 30 min. Presence of
-  the key *is* the lockout check — no separate counter read once it's set.
-- **Enforcement:** checked at `ReservationsService.reserve()` — a locked-out
-  user cannot create a **new reservation at all** (not just retry payment)
-  until the 30 min TTL expires. Existing HELD reservations are unaffected;
-  the hold-expiry cron still reclaims them normally on timeout.
-- **Why not reuse `RateLimiterService`:** it records on *every* call and
-  blocks the *same* action it counts. This needs to record only on failure
-  and block a *different* action (reservation creation) than the one that
-  produced the failure (payment submission) — a distinct small Redis check,
-  not a call into the rate limiter.
 
 ---
 
@@ -392,37 +374,39 @@ Grafana → reads Prometheus → live dashboards during load tests
 
 **Key Metrics to Watch**
 
-| Priority | Metric | Why |
-|---|---|---|
-| 1 | HTTP response time (p95) | Top-level signal — check engine light |
-| 2 | DB query duration | Catches `SELECT FOR UPDATE` queue buildup |
-| 3 | Event loop lag | Detects WebSocket broadcast saturation |
-| 4 | DB connection pool usage | Often the real bottleneck under hot writes |
-| bonus | Redis hit rate | Detects cache layer failures |
+| Priority | Metric                   | Why                                        |
+| -------- | ------------------------ | ------------------------------------------ |
+| 1        | HTTP response time (p95) | Top-level signal — check engine light      |
+| 2        | DB query duration        | Catches `SELECT FOR UPDATE` queue buildup  |
+| 3        | Event loop lag           | Detects WebSocket broadcast saturation     |
+| 4        | DB connection pool usage | Often the real bottleneck under hot writes |
+| bonus    | Redis hit rate           | Detects cache layer failures               |
 
 **Artillery Test Scenarios**
 
 Scenario 1 — Mixed read/write load:
+
 ```yaml
 phases:
   - duration: 60
     arrivalRate: 50
 scenarios:
   - flow:
-    - get: { url: "/movies" }
-    - get: { url: "/screenings/1/seats" }
-    - post:
-        url: "/reservations"
-        json: { seat_id: "{{seatId}}", screening_id: 1 }
+      - get: { url: "/movies" }
+      - get: { url: "/screenings/1/seats" }
+      - post:
+          url: "/reservations"
+          json: { seat_id: "{{seatId}}", screening_id: 1 }
 ```
 
 Scenario 2 — Hot write contention (most important):
+
 ```yaml
 scenarios:
   - flow:
-    - post:
-        url: "/reservations"
-        json: { seat_id: "B7", screening_id: 1 }
+      - post:
+          url: "/reservations"
+          json: { seat_id: "B7", screening_id: 1 }
 # 100 users → same seat → tests SELECT FOR UPDATE + unique constraint
 ```
 
@@ -434,14 +418,14 @@ scenarios:
 
 ### Patterns Used
 
-| Pattern | Where | Why |
-|---|---|---|
-| Repository | Every entity | Separates DB queries from business logic |
-| Service Layer | Every module | Business logic lives in one place |
-| DTO + Validation | Every endpoint | Input safety, strips unexpected fields |
-| Strategy | Refund calculation | No if/else chains, easily extendable |
-| Observer | Reservation events | Decouples WebSocket, cache, payment concerns |
-| Interceptor | Global | Consistent response shape + request logging |
+| Pattern          | Where              | Why                                          |
+| ---------------- | ------------------ | -------------------------------------------- |
+| Repository       | Every entity       | Separates DB queries from business logic     |
+| Service Layer    | Every module       | Business logic lives in one place            |
+| DTO + Validation | Every endpoint     | Input safety, strips unexpected fields       |
+| Strategy         | Refund calculation | No if/else chains, easily extendable         |
+| Observer         | Reservation events | Decouples WebSocket, cache, payment concerns |
+| Interceptor      | Global             | Consistent response shape + request logging  |
 
 ---
 
@@ -465,7 +449,7 @@ export class ReservationRepository {
   async findSeatWithLock(seatId: string) {
     return this.prisma.$queryRaw`
       SELECT * FROM seats WHERE id = ${seatId} FOR UPDATE
-    `
+    `;
   }
 }
 ```
@@ -497,12 +481,24 @@ Package: `@nestjs/event-emitter`
 
 ```typescript
 interface RefundStrategy {
-  calculate(amount: number): number
+  calculate(amount: number): number;
 }
 
-class FullRefundStrategy    implements RefundStrategy { calculate(a) { return a } }
-class PartialRefundStrategy implements RefundStrategy { calculate(a) { return a * 0.5 } }
-class NoRefundStrategy      implements RefundStrategy { calculate(a) { return 0 } }
+class FullRefundStrategy implements RefundStrategy {
+  calculate(a) {
+    return a;
+  }
+}
+class PartialRefundStrategy implements RefundStrategy {
+  calculate(a) {
+    return a * 0.5;
+  }
+}
+class NoRefundStrategy implements RefundStrategy {
+  calculate(a) {
+    return 0;
+  }
+}
 ```
 
 `PaymentService` picks the right strategy based on `screening.starts_at - NOW()` vs `refund_policies` table. No giant if/else chains.
@@ -513,7 +509,9 @@ class NoRefundStrategy      implements RefundStrategy { calculate(a) { return 0 
 
 ```typescript
 // main.ts
-app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+app.useGlobalPipes(
+  new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }),
+);
 ```
 
 `whitelist: true` strips any extra fields the client sends before they reach the service.
@@ -587,6 +585,7 @@ src/
 6. **Cron Jobs** — hold expiry ✅ (screening completion deferred, no current consumer; payment reconciliation deferred to phase 9, needs the Payments module)
 7. **Redis Pub/Sub bridge** — connect cron to gateway (Skipped)
 8. **Rate Limiting** — middleware + guard ✅
+
 9. **Payment** — Stripe checkout, webhook handler, refund logic
 10. **Observability** — Prometheus metrics, Grafana dashboards
 11. **Load Testing** — Artillery scenarios, tune under Grafana observation
@@ -605,7 +604,10 @@ src/
     - Cron → payment reconciliation job (finds `timed_out` payments, reconciles with Stripe) (phase 9)
     - Gateway `getScreeningSummary` → atomic Redis counters if load testing warrants (phase 11)
 
-
 ## Notes for later
 
-- **TODO (e2e tests for OAuth guards):** controller unit tests call methods directly and bypass the guard pipeline, so guard logic (`GoogleLinkAuthGuard.getAuthenticateOptions`, redirect legs) has no automated coverage. Add e2e tests (supertest) for `/auth/google/callback` and `/auth/link-google/callback` with the Google strategy stubbed — these are the only tests that exercise `canActivate`/`getAuthenticateOptions`. Motivating bug: `getAuthenticateOptions` runs on *both* the initiation and callback legs; on the callback `req.user` is undefined (no `JwtAuthGuard` there), so an unguarded `user!.id` threw a runtime `TypeError` that every unit test passed straight through.
+- **TODO (e2e tests for OAuth guards):** controller unit tests call methods directly and bypass the guard pipeline, so guard logic (`GoogleLinkAuthGuard.getAuthenticateOptions`, redirect legs) has no automated coverage. Add e2e tests (supertest) for `/auth/google/callback` and `/auth/link-google/callback` with the Google strategy stubbed — these are the only tests that exercise `canActivate`/`getAuthenticateOptions`. Motivating bug: `getAuthenticateOptions` runs on _both_ the initiation and callback legs; on the callback `req.user` is undefined (no `JwtAuthGuard` there), so an unguarded `user!.id` threw a runtime `TypeError` that every unit test passed straight through.
+
+- **TODO:** **Network Access Control** I need to spcific who is authorized to access my database and who isn't allowed.
+
+- **TODO:** **Connection Pooling** Setup the configuration to handle the connection pooling.

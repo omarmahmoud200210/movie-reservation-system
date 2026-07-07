@@ -16,10 +16,30 @@ reservations after repeated payment failures. Resolves the `DEFERRED(phase-9)` m
 `reservations.service.ts` (`cancel()`) and `reservation-broadcast.listener.ts` (HELD→CONFIRMED
 broadcast), and the payment-reconciliation placeholder comment in `hold-expiry.cron.ts`.
 
+## Reservations are single-seat (companion change, out of `PaymentsModule` proper)
+
+Booking is one seat per `reserve()` call — no seat-selection multi-pick. `reserve()` today accepts
+`seatIds: number[]` (built in an earlier phase); this phase changes that to a single `seatId: number`
+before payments are wired on top, so `Payment` stays a plain 1:1 with `Reservation` (see schema changes
+below) and there is no "booking group" concept anywhere in the payment flow. A user who wants a second
+seat calls `reserve()` again and pays for it as a separate `Payment`.
+
+Touches, in `backend/src/reservations/`:
+- `dto/create-reservation.dto.ts`: `seatIds: number[]` (`@IsArray`/`@ArrayNotEmpty`) → `seatId: number`
+  (`@IsInt`/`@Min(1)`).
+- `reservations.service.ts` `reserve()`: drop the `[...new Set(dto.seatIds)]` dedup and the "hold one or
+  more seats, all-or-nothing" framing; hold exactly one seat, return one `Reservation`.
+- `reservations.repository.ts` `holdSeats()`: takes one `seatId`, returns one `Reservation` (rename to
+  `holdSeat` if it reads better — implementer's call).
+- Existing specs referencing `seatIds` arrays (`reservations.controller.spec.ts`,
+  `reservations.repository.spec.ts`, `reservations.service.spec.ts`, `reservation-cache.listener.spec.ts`)
+  need updating for the new single-seat shape.
+
+`ReservationStatus` (`HELD`/`CONFIRMED`/`CANCELLED`) is untouched by this phase — no new value added.
+
 ## Schema changes required (this phase)
 
-Three changes to `schema.prisma`, none of them optional — the module doesn't work correctly without all
-three:
+Two changes to `schema.prisma`:
 
 **1. `PaymentStatus` enum — expand to match the documented flow.**
 Currently `PENDING, SUCCESS, FAILED, REFUNDED` (4 values, nothing in `src/` depends on these values
@@ -28,54 +48,19 @@ TIMED_OUT, FAILED, REFUNDED` (7 values), matching the flow diagram in `architect
 `REFUNDED` kept as its own terminal state (reached from `SUCCEEDED` via the cancellation flow) rather
 than collapsed into `SUCCEEDED`.
 
-**2. `Payment` ↔ `Reservation` — invert the relation from 1:1 to 1:many.**
-Today `Payment.reservationId` is `@unique` — one `Payment` row can only ever cover one `Reservation` row
-(one seat). But `reserve()` accepts `seatIds: number[]` and creates one `Reservation` row per seat in a
-single call — a real booking is routinely 2-6 seats that must be paid for as **one** Stripe Checkout
-Session, not N separate charges. Left as-is, the module cannot support booking more than one seat at a
-time, which is the common case, not an edge case.
+`Payment` ↔ `Reservation` stays 1:1 as it already is (`Payment.reservationId` `@unique`) — no relation
+change, since a `reserve()` call now only ever produces one `Reservation` to pay for.
 
-Fix: move the foreign key to the `Reservation` side.
-```prisma
-model Payment {
-  id                Int      @id @default(autoincrement())
-  amount            Int
-  currency          String
-  status            PaymentStatus @default(PENDING)
-  stripePaymentId   String?
-  stripeSessionId   String
-  stripeEventId     String?  @unique
-  refundId          String?
-  refundedAt        DateTime?
-  disputed          Boolean?
-  disputeReason     String?
-  disputedAt        DateTime?
-  paymentDate       DateTime @default(now())
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
-
-  reservations      Reservation[]
-
-  @@map("payment")
-}
-
-model Reservation {
-  // ...existing fields unchanged...
-  paymentId   Int?
-  payment     Payment? @relation(fields: [paymentId], references: [id])
-  // ...
-}
-```
-All `Reservation` rows created by one `reserve()` call that go through checkout together share the same
-`paymentId`. A cancelled/expired `HELD` row never gets a `paymentId` (it's only set when a checkout
-session is created for it).
-
-**3. `Screening.price` unit — document it, no schema change.**
+**2. `Screening.price` unit — document it, no schema change.**
 `price` is a bare `Int` with no unit comment, and existing test fixtures use values like `10`, `20`,
-`50`, `80` — round numbers consistent with whole currency units (dollars/pounds), not cents. `Payment
-.amount` (per `architecture.md`, "in cents/piastres, NEVER floats") is therefore **derived**, not stored
-raw: `amount = seatCount * screening.price * 100`. Stated explicitly here so it isn't left as an implicit
-assumption in the implementation.
+`50`, `80` — round numbers consistent with whole currency units (EGP), not piastres. `Payment.amount`
+(per `architecture.md`, "in cents/piastres, NEVER floats") is therefore **derived**, not stored raw:
+`amount = screening.price * 100`. Stated explicitly here so it isn't left as an implicit assumption in
+the implementation.
+
+**Currency is fixed to EGP** — no `PAYMENT_CURRENCY` env var, no per-user/locale selection. `currency:
+'egp'` is a constant in `PaymentsService`, not configuration, since there is exactly one value it will
+ever take.
 
 ## Why the `heldUntil` extension (not a new `ReservationStatus`)
 
@@ -86,7 +71,7 @@ session that's still open at minute 30, while `HoldExpiryCron` sweeps their `HEL
 at minute 10 — the seat gets released (and can be re-sold) while a real payment is still in flight
 against it.
 
-**Fix:** creating a checkout session extends every reservation's `heldUntil` to match the session's
+**Fix:** creating a checkout session extends the reservation's `heldUntil` to match the session's
 `expires_at` (fixed at *now + 30 min*, Stripe's minimum), instead of introducing a new
 `ReservationStatus` (e.g. `PENDING_PAYMENT`) to shield the row from the cron. The reservation stays
 `HELD` throughout — the cron's existing `WHERE status = 'HELD' AND heldUntil < now` logic keeps working
@@ -97,27 +82,24 @@ cron's next tick runs — no special-casing needed there either.
 ## Scope
 
 **In:**
+- Single-seat `reserve()` (companion change above).
 - `PaymentsModule`: checkout session creation, webhook handling, refund-on-cancel, reconciliation cron.
-- The two schema changes above (enum expansion, relation inversion).
+- The schema change above (`PaymentStatus` enum expansion).
 - Payment-abuse lockout: 3 `DECLINED`/`FAILED` payments in a rolling 24h window → blocks **new**
   reservation creation (not checkout) for 30 min. Redis-backed (`payment_failures:user:{id}` sorted set,
   `payment_lockout:user:{id}` TTL key), living in the already-`@Global()` `RedisModule` alongside
   `RateLimiterService` — not a variant of it (see `architecture.md` §8's "why not reuse
   `RateLimiterService`" note).
-- Extending `ReservationsService.cancel()` to refund a `CONFIRMED` booking (currently only cancels
+- Extending `ReservationsService.cancel()` to refund a `CONFIRMED` reservation (currently only cancels
   `HELD` rows — the `DEFERRED(phase-9)` marker there).
 - Extending `ReservationBroadcastListener` to handle a new `RESERVATION_CONFIRMED` event with a
   `seat:booked` broadcast (the `DEFERRED(phase-9)` marker there).
 - Extending `HoldExpiryCron` with the reconciliation job (the placeholder comment there).
 
 **Out:**
-- Multi-currency (`Payment.currency` stays a single app-wide value from an env var, `PAYMENT_CURRENCY`,
-  default `usd` — no per-user/per-locale currency selection).
-- Partial-seat cancellation within a multi-seat booking (cancelling one seat out of a 3-seat CONFIRMED
-  booking while keeping the other two paid) — cancellation operates on the whole booking group (every
-  `Reservation` sharing a `paymentId`) as one unit, refunding the whole `Payment` amount at the policy's
-  percentage. Per-seat partial refund is a real feature but a materially bigger one; flagged as a
-  follow-up, not built here.
+- Multi-currency — `currency` is a fixed `'egp'` constant, not configuration.
+- Multi-seat checkout / partial-seat cancellation — moot now that `reserve()` is single-seat; each
+  `Payment` covers exactly one `Reservation`.
 - Recording the *actual* refunded amount for a partial refund as its own column — `Payment` already has
   `refundId`/`refundedAt`; the Stripe refund object (fetchable via `refundId`) is the source of truth for
   the amount if it's ever needed for an audit, so no new column is added speculatively.
@@ -156,25 +138,28 @@ from `RedisModule`), not through `PaymentsService` directly. No circular module 
 
 | Route | Auth | Purpose |
 |---|---|---|
-| `POST /payments/checkout-session` | `JwtAuthGuard` (+ `RateLimitGuard`, reuse the existing per-user layer — no rule for this route in `architecture.md` today, so add one: 5/1min, key `payments:checkout`, to stop repeated session-creation spam distinct from the failed-payment lockout) | Body: `{ reservationIds: number[] }`. Validates ownership + all `HELD` + same screening + none already linked to a `Payment`, computes amount, creates the Stripe Checkout Session, creates the `Payment` row, extends `heldUntil` on all reservations, returns `{ url }` for redirect. |
+| `POST /payments/checkout-session` | `JwtAuthGuard` (+ `RateLimitGuard`, reuse the existing per-user layer — no rule for this route in `architecture.md` today, so add one: 5/1min, key `payments:checkout`, to stop repeated session-creation spam distinct from the failed-payment lockout) | Body: `{ reservationId: number }`. Validates ownership + `HELD` + not already linked to a `Payment`, computes amount, creates the Stripe Checkout Session, creates the `Payment` row, extends `heldUntil`, returns `{ url }` for redirect. |
 | `POST /payments/webhook` | none (Stripe signature verification *is* the auth) | Raw body (already enabled globally via `rawBody: true`). Verifies signature, checks `stripeEventId` idempotency, dispatches on event type. |
 | `GET /payments/reservations/:reservationId/status` | `JwtAuthGuard` | Polled by the frontend's confirmation-spinner page. Returns `{ reservationStatus, paymentStatus }`. Lives under `/payments` (not `/reservations`, despite `architecture.md`'s illustrative `GET /reservations/:id/status`) specifically to avoid the reverse module import — see "Companion changes" below. |
 
 ### `PaymentsService` — checkout session creation
 
-1. Look up the reservations by id + `userId` (ownership) via `ReservationsService`; 404 if any missing
-   or not owned (same not-found-not-forbidden convention `cancel()` already uses).
-2. Reject (409) if any aren't `HELD`, don't share the same `screeningId`, or already have a `paymentId`.
-3. `amount = seatIds.length * screening.price * 100`, `currency = process.env.PAYMENT_CURRENCY ?? 'usd'`.
-4. Create the `Payment` row (`status: PENDING`), link every reservation's `paymentId` to it, in one
-   transaction (mirrors the transactional style already in `reservations.repository.ts`).
+1. Look up the reservation by id + `userId` (ownership) via `ReservationsService`; 404 if missing or not
+   owned (same not-found-not-forbidden convention `cancel()` already uses).
+2. Reject (409) if it isn't `HELD` or a `Payment` row already exists for it (`Payment.reservationId` is
+   `@unique`, so this is a `PaymentsRepository.findByReservationId(id)` lookup, not a field on
+   `Reservation` — the FK lives on `Payment`, unchanged from the schema as it exists today).
+3. `amount = screening.price * 100`, `currency = 'egp'`.
+4. Create the `Payment` row (`status: PENDING`, `reservationId`) in one transaction (mirrors the
+   transactional style already in `reservations.repository.ts`).
 5. Call `stripe.checkout.sessions.create({ mode: 'payment', line_items: [...], success_url:
    '{FRONTEND_URL}/reservations/success?session_id={CHECKOUT_SESSION_ID}', cancel_url:
-   '{FRONTEND_URL}/reservations', expires_at: <now + 30min, unix seconds>, metadata: { paymentId } })`.
+   '{FRONTEND_URL}/reservations', expires_at: <now + 30min, unix seconds>, metadata: { paymentId:
+   payment.id } })`.
 6. Store `stripeSessionId` on the `Payment` row.
-7. Extend every linked reservation's `heldUntil` to the same *now + 30min* timestamp used as `expires_at`
+7. Extend the reservation's `heldUntil` to the same *now + 30min* timestamp used as `expires_at`
    (see "Why the `heldUntil` extension" above) — needs a new `ReservationsRepository`/`Service` method,
-   e.g. `extendHold(reservationIds, until)`.
+   e.g. `extendHold(reservationId, until)`.
 8. Return `{ url: session.url }`.
 
 ### `PaymentsService` — webhook handling
@@ -185,7 +170,7 @@ Look up `event.id` against `Payment.stripeEventId`; if already processed, return
 
 | Stripe event | `Payment.status` → | Reservation effect | Abuse counter |
 |---|---|---|---|
-| `checkout.session.completed` (`payment_status: 'paid'`) | `SUCCEEDED` | All linked reservations `HELD → CONFIRMED`, `heldUntil` cleared. Emits `RESERVATION_CONFIRMED`. | — |
+| `checkout.session.completed` (`payment_status: 'paid'`) | `SUCCEEDED` | Reservation `HELD → CONFIRMED`, `heldUntil` cleared. Emits `RESERVATION_CONFIRMED`. | — |
 | `checkout.session.completed` (`payment_status: 'unpaid'`, async method) | `IN_PROGRESS` | Unchanged (still `HELD`, hold already extended) | — |
 | `checkout.session.async_payment_failed` | `FAILED` | Unchanged (`HELD`, retriable until `heldUntil`) | `PaymentAbuseService.recordFailure(userId)` |
 | `checkout.session.expired` | `TIMED_OUT` | Unchanged — `heldUntil` is already ≈ now, next cron tick sweeps it normally | — |
@@ -197,15 +182,13 @@ Look up `event.id` against `Payment.stripeEventId`; if already processed, return
 `ReservationsService.cancel()` currently only allows cancelling `HELD` rows (throws 409 otherwise) — the
 `DEFERRED(phase-9)` marker. New behavior for a `CONFIRMED` reservation:
 
-1. Load the whole booking group: every `Reservation` sharing this row's `paymentId`.
-2. Look up the applicable `RefundPolicy` row by hours until `screening.startTime` (the `[hoursFrom,
+1. Look up the applicable `RefundPolicy` row by hours until `screening.startTime` (the `[hoursFrom,
    hoursTo)` range containing that value) → `refundPercent`.
-3. `refundAmount = payment.amount * refundPercent / 100`.
-4. `stripe.refunds.create({ payment_intent: <from the Payment/Stripe session>, amount: refundAmount })`
+2. `refundAmount = payment.amount * refundPercent / 100`.
+3. `stripe.refunds.create({ payment_intent: <from the Payment/Stripe session>, amount: refundAmount })`
    (skip the Stripe call entirely if `refundPercent === 0` — no refund to issue, just cancel).
-5. DB transaction: every reservation in the group `→ CANCELLED`, `Payment.status → REFUNDED`,
-   `refundId`/`refundedAt` set.
-6. Emit `RESERVATION_CANCELLED` per the existing event shape (drives the existing cache-invalidation +
+4. DB transaction: reservation `→ CANCELLED`, `Payment.status → REFUNDED`, `refundId`/`refundedAt` set.
+5. Emit `RESERVATION_CANCELLED` per the existing event shape (drives the existing cache-invalidation +
    WebSocket listeners for free, same as today).
 
 This lives in `PaymentsService` (it owns `Payment`/Stripe concerns), called from
@@ -264,29 +247,26 @@ Every 5 min → find Payment where status = 'TIMED_OUT' AND createdAt < NOW() - 
 
 ## Testing (TDD)
 
-- **`PaymentsService.createCheckoutSession`**: ownership/404, mixed-status/409, mixed-screening/409,
-  already-paid/409, amount calculation (seats × price × 100), Stripe SDK call args, `heldUntil` extension
-  call, `Payment` row shape.
+- **`PaymentsService.createCheckoutSession`**: ownership/404, not-`HELD`/409, already-paid/409, amount
+  calculation (`price * 100`), Stripe SDK call args, `heldUntil` extension call, `Payment` row shape.
 - **`PaymentsService.handleWebhookEvent`**: signature failure → 400 no DB write; duplicate
   `stripeEventId` → no-op; each event-type branch → correct `Payment.status` + reservation effect +
   `RESERVATION_CONFIRMED` emission (success path only) — mock the Stripe SDK, never call it for real.
 - **`PaymentsService.refundReservation`**: refund-percent lookup by hours-until-screening (each of the
-  three default ranges), `refundPercent: 0` skips the Stripe call, group-wide cancellation (all
-  reservations sharing `paymentId`), `Payment.status → REFUNDED`.
+  three default ranges), `refundPercent: 0` skips the Stripe call, `Payment.status → REFUNDED`.
 - **`PaymentAbuseService`**: `recordFailure` under 3 → no lockout key set; 3rd failure within the 24h
   window → lockout key set with the 30min TTL; failures older than 24h don't count toward the threshold;
   `isLockedOut` reflects key presence.
-- **`ReservationsService.reserve()`**: new test — locked-out user → `ForbiddenException`, no hold
-  attempted; `PaymentAbuseService.isLockedOut` called before `ReservationsRepository.holdSeats`.
+- **`ReservationsService.reserve()`**: single-seat DTO round-trip; locked-out user → `ForbiddenException`,
+  no hold attempted; `PaymentAbuseService.isLockedOut` called before `ReservationsRepository.holdSeat`.
 - **`ReservationsService.cancel()`**: `CONFIRMED` reservation now routes into the refund path instead of
   throwing 409 (replaces the existing "only HELD can be cancelled" test's coverage of that branch).
 - **`ReservationBroadcastListener`**: new `RESERVATION_CONFIRMED` → `seat:booked` broadcast with
   `SeatStatus.BOOKED`, mirroring the existing two branches' test shape.
 - **`HoldExpiryCron` reconciliation**: `TIMED_OUT` + old enough → Stripe status checked; `paid` →
   `SUCCEEDED` + confirm; anything else → `DECLINED` + abuse failure recorded.
-- **Prisma migration**: round-trip the two schema changes against a throwaway DB (apply, verify
-  `Reservation.paymentId` and the 7-value enum exist, no data loss — table is empty pre-phase-9 so no
-  real backfill risk).
+- **Prisma migration**: round-trip the enum expansion against a throwaway DB (apply, verify the 7-value
+  enum exists, no data loss — table is empty pre-phase-9 so no real backfill risk).
 
 ## Companion changes to `architecture.md`
 
@@ -295,18 +275,18 @@ Every 5 min → find Payment where status = 'TIMED_OUT' AND createdAt < NOW() - 
 - §8's illustrative `GET /reservations/:id/status` should be corrected to `GET
   /payments/reservations/:id/status` once this phase ships, with a one-line note on why (avoids
   `PaymentsModule` ↔ `ReservationsModule` circular import).
-- New subsection needed: **Payment ↔ Reservation grouping** — documenting the `paymentId` FK on
-  `Reservation` (one `Payment` can cover many seats), since §8 as written still describes the old 1:1
-  shape implicitly (`reservation_id FK` singular in the `payments` table pseudocode).
 - The Payment Abuse Lockout subsection (already added this session) stays as-is — matches this spec's
   `PaymentAbuseService` design exactly.
+- Any illustrative multi-seat / `seatIds[]` language in §8 or the reservations section should be
+  corrected to single-seat, matching the companion change above.
 
 ## Follow-ups noted for later phases
 
-- **Multi-currency**: `PAYMENT_CURRENCY` is one global env var; per-user/locale currency is a real feature
-  if this app ever serves multiple regions, not built now.
-- **Partial-seat cancellation**: cancelling one seat out of a multi-seat `CONFIRMED` booking while keeping
-  the rest — real UX gap, bigger feature, deferred.
+- **Multi-seat booking**: paying for several seats in one Stripe Checkout Session — would require
+  reintroducing seat selection in `reserve()` and a `Payment` 1:many relation; explicitly out for now
+  per this session's direction.
+- **Multi-currency**: EGP is hardcoded; per-locale currency is a real feature if this app ever serves
+  multiple regions, not built now.
 - **Refunded-amount auditing**: if a dispute or support case ever needs the exact historical refunded
   amount without calling Stripe, add a `refundedAmount` column then — not speculatively now.
 - **Async payment methods**: `IN_PROGRESS` is modeled in the enum but its full multi-event lifecycle
