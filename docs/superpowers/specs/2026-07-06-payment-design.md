@@ -29,6 +29,19 @@ TIMED_OUT, FAILED, REFUNDED` (7 values), matching the flow diagram in `architect
 than collapsed into `SUCCEEDED`.
 
 **2. `Payment` ↔ `Reservation` — invert the relation from 1:1 to 1:many.**
+
+> **⚠️ Open question / user feedback (2026-07-07):** preference is for the reservation flow to be
+> single-seat only — `reserve()` takes one seat, not `seatIds: number[]`, and a user who wants multiple
+> seats repeats the whole reserve → pay cycle once per seat rather than selecting several seats up front.
+> If that's adopted, every booking is inherently one `Reservation` row paid by one `Payment` row, and
+> `Payment.reservationId` could stay `@unique` as it is today — the 1:many inversion below may not be
+> needed at all. This needs a decision before implementation, since it ripples through more than just the
+> schema: `reserve()`'s DTO (`seatIds: number[]` → a single `seatId`), the checkout-session endpoint's
+> body (`{ reservationIds: number[] }` → a single `reservationId`), and every "booking group" reference in
+> this spec (refund-on-cancel's "load the whole booking group" step, the error-handling table, and the
+> testing section's group-cancellation case) would collapse back to single-row logic. Rationale for the
+> 1:many design as originally written follows below, for comparison.
+
 Today `Payment.reservationId` is `@unique` — one `Payment` row can only ever cover one `Reservation` row
 (one seat). But `reserve()` accepts `seatIds: number[]` and creates one `Reservation` row per seat in a
 single call — a real booking is routinely 2-6 seats that must be paid for as **one** Stripe Checkout
