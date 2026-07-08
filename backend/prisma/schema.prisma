@@ -31,7 +31,10 @@ enum ScreenStatus {
 
 enum PaymentStatus {
   PENDING
-  SUCCESS
+  IN_PROGRESS
+  SUCCEEDED
+  DECLINED
+  TIMED_OUT
   FAILED
   REFUNDED
 }
