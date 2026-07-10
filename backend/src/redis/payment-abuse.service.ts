@@ -11,7 +11,10 @@ const FAILURE_THRESHOLD = 3;
  * blocks new reservation creation for 30 min. Plain ioredis calls (not the
  * Lua-script pattern RateLimiterService uses) — this only *sets* a lockout
  * once a threshold is crossed and *reads* a single key to check it, no
- * admit/reject decision under contention.
+ * admit/reject decision under contention. Two concurrent recordFailure calls
+ * for the same user can each read a stale zcard before the other's zadd is
+ * visible, delaying the lockout by at most one extra failure — self-healing
+ * on the next call, not a security gap.
  */
 @Injectable()
 export default class PaymentAbuseService {
@@ -22,6 +25,7 @@ export default class PaymentAbuseService {
     const now = Date.now();
     const client = this.redis.getClient();
     await client.zadd(key, now, `${now}-${randomUUID()}`);
+    await client.pexpire(key, WINDOW_MS);
     await client.zremrangebyscore(key, 0, now - WINDOW_MS);
     const count = await client.zcard(key);
     if (count >= FAILURE_THRESHOLD) {

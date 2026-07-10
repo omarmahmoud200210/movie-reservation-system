@@ -4,6 +4,7 @@ import RedisCache from '../redis.cache';
 
 const mockClient = {
   zadd: jest.fn(),
+  pexpire: jest.fn(),
   zremrangebyscore: jest.fn(),
   zcard: jest.fn(),
   set: jest.fn(),
@@ -54,6 +55,17 @@ describe('PaymentAbuseService', () => {
         '1',
         'PX',
         30 * 60_000,
+      );
+    });
+
+    it('sets the failures key to expire after the 24h window', async () => {
+      mockClient.zcard.mockResolvedValue(1);
+
+      await service.recordFailure(7);
+
+      expect(mockClient.pexpire).toHaveBeenCalledWith(
+        'payment_failures:user:7',
+        24 * 60 * 60_000,
       );
     });
 
