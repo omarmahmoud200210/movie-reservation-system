@@ -6,11 +6,11 @@ import {
 import { Prisma, Reservation, ReservationStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
-export interface HoldSeatsParams {
+export interface HoldSeatParams {
   userId: number;
   screeningId: number;
   hallId: number;
-  seatIds: number[];
+  seatId: number;
   heldUntil: Date;
 }
 
@@ -25,74 +25,76 @@ export class ReservationsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Atomically hold every requested seat for a screening, all-or-nothing.
+   * Atomically hold one seat for a screening.
    *
    * Runs at the connection default isolation (READ COMMITTED), so once a racing
    * transaction commits, our post-lock existence check reads its fresh row and
    * bows out with a 409. Correctness rests on three layers:
-   *   1. `FOR UPDATE` serializes concurrent reservers of the same seats.
-   *   2. the existence check rejects seats already HELD/CONFIRMED.
+   *   1. `FOR UPDATE` serializes concurrent reservers of the same seat.
+   *   2. the existence check rejects a seat already HELD/CONFIRMED.
    *   3. the partial unique index (P2002) is the final backstop.
-   *
-   * Callers must pass a deduped `seatIds`.
    */
-  holdSeats(params: HoldSeatsParams): Promise<Reservation[]> {
-    const { userId, screeningId, hallId, seatIds, heldUntil } = params;
+  holdSeat(params: HoldSeatParams): Promise<Reservation> {
+    const { userId, screeningId, hallId, seatId, heldUntil } = params;
 
     return this.prisma.$transaction(async (tx) => {
-      // Lock in a consistent order (ORDER BY id) so two requests locking
-      // overlapping seat sets can't deadlock. The hallId filter doubles as
-      // "these seats belong to this screening's hall".
       const locked = await tx.$queryRaw<Array<{ id: number }>>(Prisma.sql`
         SELECT id FROM "seat"
-        WHERE id IN (${Prisma.join(seatIds)}) AND "hallId" = ${hallId}
-        ORDER BY id
+        WHERE id = ${seatId} AND "hallId" = ${hallId}
         FOR UPDATE`);
-      if (locked.length !== seatIds.length) {
+      if (locked.length !== 1) {
         throw new BadRequestException(
-          'One or more seats do not exist in this screening hall',
+          'Seat does not exist in this screening hall',
         );
       }
 
-      const taken = await tx.reservation.findMany({
+      const taken = await tx.reservation.findFirst({
         where: {
           screeningId,
-          seatId: { in: seatIds },
+          seatId,
           status: {
             in: [ReservationStatus.HELD, ReservationStatus.CONFIRMED],
           },
         },
-        select: { seatId: true },
+        select: { id: true },
       });
-      if (taken.length > 0) {
+      if (taken) {
         throw new ConflictException(
-          'One or more seats are already reserved for this screening',
+          'This seat is already reserved for this screening',
         );
       }
 
       try {
-        return await tx.reservation.createManyAndReturn({
-          data: seatIds.map((seatId) => ({
-            userId,
-            screeningId,
-            seatId,
-            status: ReservationStatus.HELD,
-            heldUntil,
-          })),
+        return await tx.reservation.create({
+          data: { userId, screeningId, seatId, status: ReservationStatus.HELD, heldUntil },
         });
       } catch (err) {
-        // Unique-index backstop: a concurrent tx grabbed the same seat between
-        // our check and insert.
         if (
           err instanceof Prisma.PrismaClientKnownRequestError &&
           err.code === 'P2002'
         ) {
           throw new ConflictException(
-            'One or more seats are already reserved for this screening',
+            'This seat is already reserved for this screening',
           );
         }
         throw err;
       }
+    });
+  }
+
+  /** Pushes heldUntil out — used when a checkout session outlives the normal hold window. */
+  extendHold(id: number, until: Date): Promise<Reservation> {
+    return this.prisma.reservation.update({
+      where: { id },
+      data: { heldUntil: until },
+    });
+  }
+
+  /** HELD -> CONFIRMED on successful payment; heldUntil no longer applies. */
+  confirm(id: number): Promise<Reservation> {
+    return this.prisma.reservation.update({
+      where: { id },
+      data: { status: ReservationStatus.CONFIRMED, heldUntil: null },
     });
   }
 
