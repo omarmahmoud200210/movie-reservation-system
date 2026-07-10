@@ -8,7 +8,6 @@ import { ReservationsRepository } from '../reservations.repository';
 const mockTx = {
   $queryRaw: jest.fn(),
   reservation: {
-    findMany: jest.fn(),
     findFirst: jest.fn(),
     create: jest.fn(),
   },
@@ -212,9 +211,7 @@ describe('ReservationsRepository', () => {
     it('resolves with an empty array when nothing has expired', async () => {
       mockPrisma.$queryRaw.mockResolvedValue([]);
 
-      await expect(
-        repo.releaseExpiredHolds(new Date()),
-      ).resolves.toEqual([]);
+      await expect(repo.releaseExpiredHolds(new Date())).resolves.toEqual([]);
     });
   });
 });

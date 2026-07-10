@@ -66,7 +66,13 @@ export class ReservationsRepository {
 
       try {
         return await tx.reservation.create({
-          data: { userId, screeningId, seatId, status: ReservationStatus.HELD, heldUntil },
+          data: {
+            userId,
+            screeningId,
+            seatId,
+            status: ReservationStatus.HELD,
+            heldUntil,
+          },
         });
       } catch (err) {
         if (
@@ -102,7 +108,7 @@ export class ReservationsRepository {
    * Atomically release every HELD reservation whose hold has expired,
    * returning exactly the rows this call changed. A single UPDATE...RETURNING
    * has no find-then-update race window, unlike a separate SELECT + UPDATE.
-   * Reuses the same Prisma.sql/$queryRaw escape hatch as `holdSeats`, for the
+   * Reuses the same Prisma.sql/$queryRaw escape hatch as `holdSeat`, for the
    * same reason: Prisma's query builder can't express this.
    */
   releaseExpiredHolds(now: Date): Promise<ExpiredHold[]> {
