@@ -41,7 +41,7 @@ describe('ReservationsController', () => {
   describe('delegation', () => {
     it('reserve -> service.reserve with the caller id and dto', async () => {
       const dto = { screeningId: 3, seatId: 11 };
-      mockService.reserve.mockResolvedValue([{ id: 100 }]);
+      mockService.reserve.mockResolvedValue({ id: 100 });
 
       await controller.reserve(user as never, dto);
 

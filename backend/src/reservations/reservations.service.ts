@@ -83,6 +83,8 @@ export class ReservationsService {
 
   async cancel(userId: number, id: number): Promise<Reservation> {
     const reservation = await this.findOwned(userId, id);
+    // Only HELD is cancellable here — cancelling a CONFIRMED (paid) booking
+    // needs a refund first, handled by PaymentsService in a later phase.
     if (reservation.status !== ReservationStatus.HELD) {
       throw new ConflictException('Only a held reservation can be cancelled');
     }
@@ -104,8 +106,8 @@ export class ReservationsService {
 
   /** 404 (not 403) when it belongs to someone else, to avoid leaking existence. */
   async findOwned(userId: number, id: number): Promise<Reservation> {
-    const reservation = await this.reservationsRepo.findById(id);
-    if (!reservation || reservation.userId !== userId) {
+    const reservation = await this.getById(id);
+    if (reservation.userId !== userId) {
       throw new NotFoundException(`Reservation ${id} not found`);
     }
     return reservation;
