@@ -18,7 +18,6 @@ export default class PaymentAbuseService {
   constructor(private readonly redis: RedisCache) {}
 
   async recordFailure(userId: number): Promise<void> {
-    // what if we put this in lua script to work atomic ?
     const key = `payment_failures:user:${userId}`;
     const now = Date.now();
     const client = this.redis.getClient();
