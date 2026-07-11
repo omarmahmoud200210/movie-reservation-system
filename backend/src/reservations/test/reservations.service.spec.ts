@@ -147,6 +147,7 @@ describe('ReservationsService', () => {
       await expect(service.reserve(7, dto)).rejects.toBeInstanceOf(
         ForbiddenException,
       );
+      expect(mockPaymentAbuse.isLockedOut).toHaveBeenCalledWith(7);
       expect(mockScreeningsRepo.findById).not.toHaveBeenCalled();
       expect(mockReservationsRepo.holdSeat).not.toHaveBeenCalled();
     });
