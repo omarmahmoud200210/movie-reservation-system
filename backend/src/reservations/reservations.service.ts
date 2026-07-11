@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -8,6 +9,7 @@ import { Reservation, ReservationStatus, ScreenStatus } from '@prisma/client';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ReservationsRepository } from './reservations.repository';
 import { ScreeningsRepository } from '../screenings/screenings.repository';
+import PaymentAbuseService from '../redis/payment-abuse.service';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import {
   RESERVATION_CANCELLED,
@@ -23,6 +25,7 @@ export class ReservationsService {
     private readonly reservationsRepo: ReservationsRepository,
     private readonly screeningsRepo: ScreeningsRepository,
     private readonly events: EventEmitter2,
+    private readonly paymentAbuse: PaymentAbuseService,
   ) {}
 
   /**
@@ -33,6 +36,12 @@ export class ReservationsService {
     userId: number,
     dto: CreateReservationDto,
   ): Promise<Reservation> {
+    if (await this.paymentAbuse.isLockedOut(userId)) {
+      throw new ForbiddenException(
+        'Too many failed payments — try again later',
+      );
+    }
+
     const screening = await this.screeningsRepo.findById(dto.screeningId);
     if (!screening || screening.status !== ScreenStatus.SCHEDULED) {
       throw new NotFoundException(`Screening ${dto.screeningId} not found`);

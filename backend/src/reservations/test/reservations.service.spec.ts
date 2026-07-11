@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -9,6 +10,7 @@ import { ReservationStatus, ScreenStatus } from '@prisma/client';
 import { ReservationsService } from '../reservations.service';
 import { ReservationsRepository } from '../reservations.repository';
 import { ScreeningsRepository } from '../../screenings/screenings.repository';
+import PaymentAbuseService from '../../redis/payment-abuse.service';
 import {
   RESERVATION_CANCELLED,
   RESERVATION_CONFIRMED,
@@ -26,6 +28,10 @@ const mockReservationsRepo = {
 };
 const mockScreeningsRepo = { findById: jest.fn() };
 const mockEvents = { emit: jest.fn() };
+const mockPaymentAbuse = {
+  isLockedOut: jest.fn().mockResolvedValue(false),
+  recordFailure: jest.fn(),
+};
 
 const NOW = new Date('2026-07-02T12:00:00.000Z');
 const HELD_UNTIL = new Date('2026-07-02T12:10:00.000Z'); // NOW + 10min
@@ -52,6 +58,7 @@ describe('ReservationsService', () => {
         { provide: ReservationsRepository, useValue: mockReservationsRepo },
         { provide: ScreeningsRepository, useValue: mockScreeningsRepo },
         { provide: EventEmitter2, useValue: mockEvents },
+        { provide: PaymentAbuseService, useValue: mockPaymentAbuse },
       ],
     }).compile();
 
@@ -132,6 +139,26 @@ describe('ReservationsService', () => {
         ConflictException,
       );
       expect(mockEvents.emit).not.toHaveBeenCalled();
+    });
+
+    it('throws 403 when the user is payment-locked-out, before any hold logic runs', async () => {
+      mockPaymentAbuse.isLockedOut.mockResolvedValue(true);
+
+      await expect(service.reserve(7, dto)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      expect(mockScreeningsRepo.findById).not.toHaveBeenCalled();
+      expect(mockReservationsRepo.holdSeat).not.toHaveBeenCalled();
+    });
+
+    it('proceeds when the user is not locked out', async () => {
+      mockPaymentAbuse.isLockedOut.mockResolvedValue(false);
+      mockScreeningsRepo.findById.mockResolvedValue(screening);
+      mockReservationsRepo.holdSeat.mockResolvedValue({ id: 100, seatId: 11 });
+
+      await expect(service.reserve(7, dto)).resolves.toMatchObject({
+        id: 100,
+      });
     });
   });
 
