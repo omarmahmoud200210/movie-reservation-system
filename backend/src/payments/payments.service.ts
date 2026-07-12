@@ -209,6 +209,13 @@ export class PaymentsService {
       throw new NotFoundException(`No payment found for reservation ${reservation.id}`);
     }
 
+    // Already refunded (e.g. a retry after the Stripe call succeeded but a
+    // later step in a previous attempt threw) — don't touch Stripe again,
+    // just make sure the reservation ends up cancelled.
+    if (payment.status === PaymentStatus.REFUNDED) {
+      return this.reservationsService.finalizeCancel(reservation);
+    }
+
     const screening = await this.screeningsRepo.findById(reservation.screeningId);
     if (!screening) {
       throw new ConflictException('Screening no longer exists');
@@ -220,19 +227,29 @@ export class PaymentsService {
 
     let refundId: string | undefined;
     if (refundPercent > 0 && payment.stripePaymentId) {
-      const refund = await this.stripe.refunds.create({
-        payment_intent: payment.stripePaymentId,
-        amount: refundAmount,
-      });
+      const refund = await this.stripe.refunds.create(
+        {
+          payment_intent: payment.stripePaymentId,
+          amount: refundAmount,
+        },
+        { idempotencyKey: `refund-${payment.id}` },
+      );
       refundId = refund.id;
     }
 
-    await this.paymentsRepo.update(payment.id, {
-      status: PaymentStatus.REFUNDED,
-      refundId,
-      refundedAt: new Date(),
-    });
+    try {
+      await this.paymentsRepo.update(payment.id, {
+        status: PaymentStatus.REFUNDED,
+        refundId,
+        refundedAt: new Date(),
+      });
 
-    return this.reservationsService.finalizeCancel(reservation);
+      return await this.reservationsService.finalizeCancel(reservation);
+    } catch (err) {
+      this.logger.error(
+        `Refund ${refundId ?? '(none)'} recorded at Stripe for payment ${payment.id} but finalizing failed: ${(err as Error).message}`,
+      );
+      throw err;
+    }
   }
 }

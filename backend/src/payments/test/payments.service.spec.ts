@@ -376,16 +376,60 @@ describe('PaymentsService', () => {
 
       await service.refundReservation(confirmed as any);
 
-      expect(stripeMock.refunds.create).toHaveBeenCalledWith({
-        payment_intent: 'pi_1',
-        amount: 5000,
-      });
+      expect(stripeMock.refunds.create).toHaveBeenCalledWith(
+        {
+          payment_intent: 'pi_1',
+          amount: 5000,
+        },
+        { idempotencyKey: 'refund-1' },
+      );
       expect(mockPaymentsRepo.update).toHaveBeenCalledWith(1, {
         status: PaymentStatus.REFUNDED,
         refundId: 're_1',
         refundedAt: expect.any(Date),
       });
       expect(mockReservationsService.finalizeCancel).toHaveBeenCalledWith(confirmed);
+    });
+
+    it('partial refund (50%-window): halves the amount, still passes an idempotency key', async () => {
+      mockPaymentsRepo.findByReservationId.mockResolvedValue(payment);
+      mockScreeningsRepo.findById.mockResolvedValue({
+        ...screening,
+        startTime: new Date(Date.now() + 24 * 60 * 60_000),
+      });
+      mockPaymentsRepo.findRefundPolicy.mockResolvedValue({ refundPercent: 50 });
+      stripeMock.refunds.create.mockResolvedValue({ id: 're_2' });
+      mockReservationsService.finalizeCancel.mockResolvedValue({ ...confirmed, status: 'CANCELLED' });
+
+      await service.refundReservation(confirmed as any);
+
+      expect(stripeMock.refunds.create).toHaveBeenCalledWith(
+        {
+          payment_intent: 'pi_1',
+          amount: 2500,
+        },
+        { idempotencyKey: 'refund-1' },
+      );
+      expect(mockPaymentsRepo.update).toHaveBeenCalledWith(1, {
+        status: PaymentStatus.REFUNDED,
+        refundId: 're_2',
+        refundedAt: expect.any(Date),
+      });
+    });
+
+    it('payment already REFUNDED: skips Stripe and the repo update, just finalizes the cancel', async () => {
+      mockPaymentsRepo.findByReservationId.mockResolvedValue({
+        ...payment,
+        status: PaymentStatus.REFUNDED,
+      });
+      mockReservationsService.finalizeCancel.mockResolvedValue({ ...confirmed, status: 'CANCELLED' });
+
+      const result = await service.refundReservation(confirmed as any);
+
+      expect(stripeMock.refunds.create).not.toHaveBeenCalled();
+      expect(mockPaymentsRepo.update).not.toHaveBeenCalled();
+      expect(mockReservationsService.finalizeCancel).toHaveBeenCalledWith(confirmed);
+      expect(result).toEqual({ ...confirmed, status: 'CANCELLED' });
     });
 
     it('no refund window (0%): skips the Stripe call, still cancels', async () => {
