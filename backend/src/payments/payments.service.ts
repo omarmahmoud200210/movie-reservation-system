@@ -4,10 +4,11 @@ import {
   Inject,
   Injectable,
   Logger,
+  NotFoundException,
   forwardRef,
 } from '@nestjs/common';
 import Stripe from 'stripe';
-import { Payment, Prisma, PaymentStatus, ReservationStatus } from '@prisma/client';
+import { Payment, Prisma, PaymentStatus, Reservation, ReservationStatus } from '@prisma/client';
 import { PaymentsRepository } from './payments.repository';
 import { ReservationsService } from '../reservations/reservations.service';
 import { ScreeningsRepository } from '../screenings/screenings.repository';
@@ -200,5 +201,38 @@ export class PaymentsService {
       disputedAt: new Date(),
       stripeEventId: event.id,
     });
+  }
+
+  async refundReservation(reservation: Reservation): Promise<Reservation> {
+    const payment = await this.paymentsRepo.findByReservationId(reservation.id);
+    if (!payment) {
+      throw new NotFoundException(`No payment found for reservation ${reservation.id}`);
+    }
+
+    const screening = await this.screeningsRepo.findById(reservation.screeningId);
+    if (!screening) {
+      throw new ConflictException('Screening no longer exists');
+    }
+    const hoursUntilScreening = (screening.startTime.getTime() - Date.now()) / (60 * 60 * 1000);
+    const policy = await this.paymentsRepo.findRefundPolicy(hoursUntilScreening);
+    const refundPercent = policy?.refundPercent ?? 0;
+    const refundAmount = Math.round((payment.amount * refundPercent) / 100);
+
+    let refundId: string | undefined;
+    if (refundPercent > 0 && payment.stripePaymentId) {
+      const refund = await this.stripe.refunds.create({
+        payment_intent: payment.stripePaymentId,
+        amount: refundAmount,
+      });
+      refundId = refund.id;
+    }
+
+    await this.paymentsRepo.update(payment.id, {
+      status: PaymentStatus.REFUNDED,
+      refundId,
+      refundedAt: new Date(),
+    });
+
+    return this.reservationsService.finalizeCancel(reservation);
   }
 }

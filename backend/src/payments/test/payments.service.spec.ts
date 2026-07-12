@@ -359,4 +359,61 @@ describe('PaymentsService', () => {
       );
     });
   });
+
+  describe('refundReservation', () => {
+    const confirmed = { id: 100, screeningId: 3, seatId: 11, status: ReservationStatus.CONFIRMED, userId: 7 };
+    const payment = { id: 1, reservationId: 100, amount: 5000, stripePaymentId: 'pi_1' };
+
+    it('full refund (>=48h out): refunds via Stripe, sets REFUNDED, cancels the reservation', async () => {
+      mockPaymentsRepo.findByReservationId.mockResolvedValue(payment);
+      mockScreeningsRepo.findById.mockResolvedValue({
+        ...screening,
+        startTime: new Date(Date.now() + 72 * 60 * 60_000),
+      });
+      mockPaymentsRepo.findRefundPolicy.mockResolvedValue({ refundPercent: 100 });
+      stripeMock.refunds.create.mockResolvedValue({ id: 're_1' });
+      mockReservationsService.finalizeCancel.mockResolvedValue({ ...confirmed, status: 'CANCELLED' });
+
+      await service.refundReservation(confirmed as any);
+
+      expect(stripeMock.refunds.create).toHaveBeenCalledWith({
+        payment_intent: 'pi_1',
+        amount: 5000,
+      });
+      expect(mockPaymentsRepo.update).toHaveBeenCalledWith(1, {
+        status: PaymentStatus.REFUNDED,
+        refundId: 're_1',
+        refundedAt: expect.any(Date),
+      });
+      expect(mockReservationsService.finalizeCancel).toHaveBeenCalledWith(confirmed);
+    });
+
+    it('no refund window (0%): skips the Stripe call, still cancels', async () => {
+      mockPaymentsRepo.findByReservationId.mockResolvedValue(payment);
+      mockScreeningsRepo.findById.mockResolvedValue({
+        ...screening,
+        startTime: new Date(Date.now() + 1 * 60 * 60_000),
+      });
+      mockPaymentsRepo.findRefundPolicy.mockResolvedValue({ refundPercent: 0 });
+      mockReservationsService.finalizeCancel.mockResolvedValue({ ...confirmed, status: 'CANCELLED' });
+
+      await service.refundReservation(confirmed as any);
+
+      expect(stripeMock.refunds.create).not.toHaveBeenCalled();
+      expect(mockPaymentsRepo.update).toHaveBeenCalledWith(1, {
+        status: PaymentStatus.REFUNDED,
+        refundId: undefined,
+        refundedAt: expect.any(Date),
+      });
+    });
+
+    it('throws 404 when no Payment exists for the reservation', async () => {
+      const { NotFoundException } = require('@nestjs/common');
+      mockPaymentsRepo.findByReservationId.mockResolvedValue(null);
+
+      await expect(service.refundReservation(confirmed as any)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+  });
 });

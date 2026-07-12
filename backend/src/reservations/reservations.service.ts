@@ -2,14 +2,17 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
+  forwardRef,
 } from '@nestjs/common';
 import { Reservation, ReservationStatus, ScreenStatus } from '@prisma/client';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ReservationsRepository } from './reservations.repository';
 import { ScreeningsRepository } from '../screenings/screenings.repository';
 import PaymentAbuseService from '../redis/payment-abuse.service';
+import { PaymentsService } from '../payments/payments.service';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import {
   RESERVATION_CANCELLED,
@@ -26,6 +29,8 @@ export class ReservationsService {
     private readonly screeningsRepo: ScreeningsRepository,
     private readonly events: EventEmitter2,
     private readonly paymentAbuse: PaymentAbuseService,
+    @Inject(forwardRef(() => PaymentsService))
+    private readonly paymentsService: PaymentsService,
   ) {}
 
   /**
@@ -92,10 +97,12 @@ export class ReservationsService {
 
   async cancel(userId: number, id: number): Promise<Reservation> {
     const reservation = await this.findOwned(userId, id);
-    // Only HELD is cancellable here — cancelling a CONFIRMED (paid) booking
-    // needs a refund first, handled by PaymentsService in a later phase.
+
+    if (reservation.status === ReservationStatus.CONFIRMED) {
+      return this.paymentsService.refundReservation(reservation);
+    }
     if (reservation.status !== ReservationStatus.HELD) {
-      throw new ConflictException('Only a held reservation can be cancelled');
+      throw new ConflictException('Only a held or confirmed reservation can be cancelled');
     }
     return this.finalizeCancel(reservation);
   }

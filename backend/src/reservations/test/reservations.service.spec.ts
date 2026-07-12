@@ -11,6 +11,7 @@ import { ReservationsService } from '../reservations.service';
 import { ReservationsRepository } from '../reservations.repository';
 import { ScreeningsRepository } from '../../screenings/screenings.repository';
 import PaymentAbuseService from '../../redis/payment-abuse.service';
+import { PaymentsService } from '../../payments/payments.service';
 import {
   RESERVATION_CANCELLED,
   RESERVATION_CONFIRMED,
@@ -32,6 +33,7 @@ const mockPaymentAbuse = {
   isLockedOut: jest.fn().mockResolvedValue(false),
   recordFailure: jest.fn(),
 };
+const mockPaymentsService = { refundReservation: jest.fn() };
 
 const NOW = new Date('2026-07-02T12:00:00.000Z');
 const HELD_UNTIL = new Date('2026-07-02T12:10:00.000Z'); // NOW + 10min
@@ -59,6 +61,7 @@ describe('ReservationsService', () => {
         { provide: ScreeningsRepository, useValue: mockScreeningsRepo },
         { provide: EventEmitter2, useValue: mockEvents },
         { provide: PaymentAbuseService, useValue: mockPaymentAbuse },
+        { provide: PaymentsService, useValue: mockPaymentsService },
       ],
     }).compile();
 
@@ -274,10 +277,22 @@ describe('ReservationsService', () => {
       expect(mockReservationsRepo.setStatus).not.toHaveBeenCalled();
     });
 
-    it('throws 409 when the reservation is not HELD', async () => {
+    it('delegates to PaymentsService.refundReservation for a CONFIRMED reservation', async () => {
+      const confirmedReservation = { ...held, status: ReservationStatus.CONFIRMED };
+      mockReservationsRepo.findById.mockResolvedValue(confirmedReservation);
+      const refunded = { ...confirmedReservation, status: ReservationStatus.CANCELLED };
+      mockPaymentsService.refundReservation.mockResolvedValue(refunded);
+
+      await expect(service.cancel(7, 100)).resolves.toBe(refunded);
+
+      expect(mockPaymentsService.refundReservation).toHaveBeenCalledWith(confirmedReservation);
+      expect(mockReservationsRepo.setStatus).not.toHaveBeenCalled();
+    });
+
+    it('throws 409 when the reservation is CANCELLED (neither HELD nor CONFIRMED)', async () => {
       mockReservationsRepo.findById.mockResolvedValue({
         ...held,
-        status: ReservationStatus.CONFIRMED,
+        status: ReservationStatus.CANCELLED,
       });
 
       await expect(service.cancel(7, 100)).rejects.toBeInstanceOf(
