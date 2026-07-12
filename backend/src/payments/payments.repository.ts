@@ -29,6 +29,10 @@ export class PaymentsRepository {
     return this.prisma.payment.update({ where: { id }, data });
   }
 
+  delete(id: number): Promise<Payment> {
+    return this.prisma.payment.delete({ where: { id } });
+  }
+
   findStuckTimedOut(olderThan: Date): Promise<Payment[]> {
     return this.prisma.payment.findMany({
       where: { status: PaymentStatus.TIMED_OUT, createdAt: { lt: olderThan } },

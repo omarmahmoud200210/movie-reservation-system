@@ -1,11 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException } from '@nestjs/common';
-import { PaymentStatus, ReservationStatus } from '@prisma/client';
+import { Prisma, PaymentStatus, ReservationStatus } from '@prisma/client';
 import { PaymentsService } from '../payments.service';
 import { PaymentsRepository } from '../payments.repository';
 import { ReservationsService } from '../../reservations/reservations.service';
 import { ScreeningsRepository } from '../../screenings/screenings.repository';
-import PaymentAbuseService from '../../redis/payment-abuse.service';
 
 jest.mock('stripe', () => {
   return jest.fn().mockImplementation(() => ({
@@ -26,6 +25,7 @@ const mockPaymentsRepo = {
   findByStripePaymentId: jest.fn(),
   create: jest.fn(),
   update: jest.fn(),
+  delete: jest.fn(),
   findStuckTimedOut: jest.fn(),
   findRefundPolicy: jest.fn(),
 };
@@ -37,7 +37,6 @@ const mockReservationsService = {
   finalizeCancel: jest.fn(),
 };
 const mockScreeningsRepo = { findById: jest.fn() };
-const mockPaymentAbuse = { recordFailure: jest.fn() };
 
 const screening = { id: 3, price: 50, startTime: new Date('2026-07-10T18:00:00.000Z') };
 const heldReservation = { id: 100, screeningId: 3, seatId: 11, status: ReservationStatus.HELD, userId: 7 };
@@ -57,7 +56,6 @@ describe('PaymentsService', () => {
         { provide: PaymentsRepository, useValue: mockPaymentsRepo },
         { provide: ReservationsService, useValue: mockReservationsService },
         { provide: ScreeningsRepository, useValue: mockScreeningsRepo },
-        { provide: PaymentAbuseService, useValue: mockPaymentAbuse },
       ],
     }).compile();
 
@@ -96,7 +94,11 @@ describe('PaymentsService', () => {
         }),
       );
       expect(mockPaymentsRepo.update).toHaveBeenCalledWith(1, { stripeSessionId: 'cs_123' });
-      expect(mockReservationsService.extendHold).toHaveBeenCalledWith(100, expect.any(Date));
+      const expiresAtSeconds = stripeMock.checkout.sessions.create.mock.calls[0][0].expires_at;
+      expect(mockReservationsService.extendHold).toHaveBeenCalledWith(
+        100,
+        new Date(expiresAtSeconds * 1000),
+      );
     });
 
     it('throws 409 when the reservation is not HELD', async () => {
@@ -128,6 +130,47 @@ describe('PaymentsService', () => {
       await expect(service.createCheckoutSession(7, 999)).rejects.toBeInstanceOf(
         NotFoundException,
       );
+    });
+
+    it('throws 409 when the screening no longer exists', async () => {
+      mockReservationsService.findOwned.mockResolvedValue(heldReservation);
+      mockPaymentsRepo.findByReservationId.mockResolvedValue(null);
+      mockScreeningsRepo.findById.mockResolvedValue(null);
+
+      await expect(service.createCheckoutSession(7, 100)).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(mockPaymentsRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('deletes the orphaned Payment row and rethrows when Stripe session creation fails', async () => {
+      mockReservationsService.findOwned.mockResolvedValue(heldReservation);
+      mockPaymentsRepo.findByReservationId.mockResolvedValue(null);
+      mockScreeningsRepo.findById.mockResolvedValue(screening);
+      mockPaymentsRepo.create.mockResolvedValue({ id: 1, reservationId: 100 });
+      const stripeError = new Error('Stripe API is down');
+      stripeMock.checkout.sessions.create.mockRejectedValue(stripeError);
+
+      await expect(service.createCheckoutSession(7, 100)).rejects.toThrow(stripeError);
+
+      expect(mockPaymentsRepo.delete).toHaveBeenCalledWith(1);
+      expect(mockReservationsService.extendHold).not.toHaveBeenCalled();
+    });
+
+    it('throws ConflictException when concurrent Payment creation races on the unique constraint', async () => {
+      mockReservationsService.findOwned.mockResolvedValue(heldReservation);
+      mockPaymentsRepo.findByReservationId.mockResolvedValue(null);
+      mockScreeningsRepo.findById.mockResolvedValue(screening);
+      const p2002 = new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
+        code: 'P2002',
+        clientVersion: '5.0.0',
+      });
+      mockPaymentsRepo.create.mockRejectedValue(p2002);
+
+      await expect(service.createCheckoutSession(7, 100)).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(stripeMock.checkout.sessions.create).not.toHaveBeenCalled();
     });
   });
 });
