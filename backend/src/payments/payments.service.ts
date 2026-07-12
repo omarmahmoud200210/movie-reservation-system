@@ -5,7 +5,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import Stripe from 'stripe';
-import { Prisma, PaymentStatus, ReservationStatus } from '@prisma/client';
+import { Payment, Prisma, PaymentStatus, ReservationStatus } from '@prisma/client';
 import { PaymentsRepository } from './payments.repository';
 import { ReservationsService } from '../reservations/reservations.service';
 import { ScreeningsRepository } from '../screenings/screenings.repository';
@@ -44,7 +44,7 @@ export class PaymentsService {
     }
     const amount = screening.price * 100;
 
-    let payment;
+    let payment: Payment;
     try {
       payment = await this.paymentsRepo.create({
         reservationId,
