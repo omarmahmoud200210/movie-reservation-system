@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Inject,
   Injectable,
@@ -9,6 +10,7 @@ import { Payment, Prisma, PaymentStatus, ReservationStatus } from '@prisma/clien
 import { PaymentsRepository } from './payments.repository';
 import { ReservationsService } from '../reservations/reservations.service';
 import { ScreeningsRepository } from '../screenings/screenings.repository';
+import PaymentAbuseService from '../redis/payment-abuse.service';
 
 const CHECKOUT_EXPIRY_MINUTES = 30;
 // ponytail: 'usd' while testing — flip to 'egp' once EGP is confirmed chargeable on the Stripe account.
@@ -23,6 +25,7 @@ export class PaymentsService {
     @Inject(forwardRef(() => ReservationsService))
     private readonly reservationsService: ReservationsService,
     private readonly screeningsRepo: ScreeningsRepository,
+    private readonly paymentAbuse: PaymentAbuseService,
   ) {}
 
   async createCheckoutSession(
@@ -91,5 +94,100 @@ export class PaymentsService {
       await this.paymentsRepo.delete(payment.id);
       throw err;
     }
+  }
+
+  async handleWebhookEvent(rawBody: Buffer, signature: string): Promise<{ received: true }> {
+    let event: Stripe.Event;
+    try {
+      event = this.stripe.webhooks.constructEvent(
+        rawBody,
+        signature,
+        process.env.STRIPE_WEBHOOK_SECRET as string,
+      );
+    } catch (err) {
+      throw new BadRequestException(
+        `Webhook signature verification failed: ${(err as Error).message}`,
+      );
+    }
+
+    const alreadyProcessed = await this.paymentsRepo.findByStripeEventId(event.id);
+    if (alreadyProcessed) {
+      return { received: true };
+    }
+
+    switch (event.type) {
+      case 'checkout.session.completed':
+        await this.handleCheckoutCompleted(event);
+        break;
+      case 'checkout.session.async_payment_failed':
+        await this.handleAsyncPaymentFailed(event);
+        break;
+      case 'checkout.session.expired':
+        await this.handleCheckoutExpired(event);
+        break;
+      case 'charge.dispute.created':
+        await this.handleDisputeCreated(event);
+        break;
+      default:
+        break;
+    }
+
+    return { received: true };
+  }
+
+  private paymentIdFrom(session: Stripe.Checkout.Session): number {
+    return Number(session.metadata?.paymentId);
+  }
+
+  private async handleCheckoutCompleted(event: Stripe.Event): Promise<void> {
+    const session = event.data.object as Stripe.Checkout.Session;
+    const paymentId = this.paymentIdFrom(session);
+
+    if (session.payment_status === 'paid') {
+      const payment = await this.paymentsRepo.update(paymentId, {
+        status: PaymentStatus.SUCCEEDED,
+        stripeEventId: event.id,
+        stripePaymentId: session.payment_intent as string,
+      });
+      await this.reservationsService.confirmPayment(payment.reservationId);
+      return;
+    }
+
+    await this.paymentsRepo.update(paymentId, {
+      status: PaymentStatus.IN_PROGRESS,
+      stripeEventId: event.id,
+    });
+  }
+
+  private async handleAsyncPaymentFailed(event: Stripe.Event): Promise<void> {
+    const session = event.data.object as Stripe.Checkout.Session;
+    const paymentId = this.paymentIdFrom(session);
+    const payment = await this.paymentsRepo.update(paymentId, {
+      status: PaymentStatus.FAILED,
+      stripeEventId: event.id,
+    });
+    const reservation = await this.reservationsService.getById(payment.reservationId);
+    await this.paymentAbuse.recordFailure(reservation.userId);
+  }
+
+  private async handleCheckoutExpired(event: Stripe.Event): Promise<void> {
+    const session = event.data.object as Stripe.Checkout.Session;
+    const paymentId = this.paymentIdFrom(session);
+    await this.paymentsRepo.update(paymentId, {
+      status: PaymentStatus.TIMED_OUT,
+      stripeEventId: event.id,
+    });
+  }
+
+  private async handleDisputeCreated(event: Stripe.Event): Promise<void> {
+    const dispute = event.data.object as Stripe.Dispute;
+    const payment = await this.paymentsRepo.findByStripePaymentId(dispute.payment_intent as string);
+    if (!payment) return;
+    await this.paymentsRepo.update(payment.id, {
+      disputed: true,
+      disputeReason: dispute.reason,
+      disputedAt: new Date(),
+      stripeEventId: event.id,
+    });
   }
 }
