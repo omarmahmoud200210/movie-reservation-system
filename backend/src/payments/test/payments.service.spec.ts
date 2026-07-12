@@ -22,6 +22,7 @@ jest.mock('stripe', () => {
 
 const mockPaymentsRepo = {
   findByReservationId: jest.fn(),
+  findById: jest.fn(),
   findByStripeEventId: jest.fn(),
   findByStripePaymentId: jest.fn(),
   create: jest.fn(),
@@ -215,16 +216,57 @@ describe('PaymentsService', () => {
         },
       });
       mockPaymentsRepo.findByStripeEventId.mockResolvedValue(null);
+      mockPaymentsRepo.findById.mockResolvedValue({ id: 1, reservationId: 100 });
       mockPaymentsRepo.update.mockResolvedValue({ id: 1, reservationId: 100 });
 
       await service.handleWebhookEvent(rawBody, signature);
 
+      expect(mockReservationsService.confirmPayment).toHaveBeenCalledWith(100);
       expect(mockPaymentsRepo.update).toHaveBeenCalledWith(1, {
         status: PaymentStatus.SUCCEEDED,
         stripeEventId: 'evt_2',
         stripePaymentId: 'pi_1',
       });
-      expect(mockReservationsService.confirmPayment).toHaveBeenCalledWith(100);
+    });
+
+    it('checkout.session.completed (paid) -> confirmPayment throwing means stripeEventId is never persisted', async () => {
+      stripeMock.webhooks.constructEvent.mockReturnValue({
+        id: 'evt_2b',
+        type: 'checkout.session.completed',
+        data: {
+          object: {
+            payment_status: 'paid',
+            payment_intent: 'pi_1',
+            metadata: { paymentId: '1' },
+          },
+        },
+      });
+      mockPaymentsRepo.findByStripeEventId.mockResolvedValue(null);
+      mockPaymentsRepo.findById.mockResolvedValue({ id: 1, reservationId: 100 });
+      mockReservationsService.confirmPayment.mockRejectedValue(new Error('db hiccup'));
+
+      await expect(service.handleWebhookEvent(rawBody, signature)).rejects.toThrow(
+        'db hiccup',
+      );
+
+      expect(mockPaymentsRepo.update).not.toHaveBeenCalled();
+    });
+
+    it('checkout.session.completed -> no-ops when the payment row cannot be found', async () => {
+      stripeMock.webhooks.constructEvent.mockReturnValue({
+        id: 'evt_2c',
+        type: 'checkout.session.completed',
+        data: {
+          object: { payment_status: 'paid', payment_intent: 'pi_1', metadata: { paymentId: '999' } },
+        },
+      });
+      mockPaymentsRepo.findByStripeEventId.mockResolvedValue(null);
+      mockPaymentsRepo.findById.mockResolvedValue(null);
+
+      await service.handleWebhookEvent(rawBody, signature);
+
+      expect(mockReservationsService.confirmPayment).not.toHaveBeenCalled();
+      expect(mockPaymentsRepo.update).not.toHaveBeenCalled();
     });
 
     it('checkout.session.completed (unpaid, async) -> IN_PROGRESS, reservation untouched', async () => {
@@ -234,6 +276,7 @@ describe('PaymentsService', () => {
         data: { object: { payment_status: 'unpaid', metadata: { paymentId: '1' } } },
       });
       mockPaymentsRepo.findByStripeEventId.mockResolvedValue(null);
+      mockPaymentsRepo.findById.mockResolvedValue({ id: 1, reservationId: 100 });
 
       await service.handleWebhookEvent(rawBody, signature);
 
@@ -296,6 +339,24 @@ describe('PaymentsService', () => {
         disputedAt: expect.any(Date),
         stripeEventId: 'evt_6',
       });
+    });
+
+    it('charge.dispute.created -> logs and no-ops when no payment matches', async () => {
+      stripeMock.webhooks.constructEvent.mockReturnValue({
+        id: 'evt_7',
+        type: 'charge.dispute.created',
+        data: { object: { payment_intent: 'pi_missing', reason: 'fraudulent' } },
+      });
+      mockPaymentsRepo.findByStripeEventId.mockResolvedValue(null);
+      mockPaymentsRepo.findByStripePaymentId.mockResolvedValue(null);
+      const warnSpy = jest.spyOn((service as any).logger, 'warn').mockImplementation();
+
+      await service.handleWebhookEvent(rawBody, signature);
+
+      expect(mockPaymentsRepo.update).not.toHaveBeenCalled();
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('pi_missing'),
+      );
     });
   });
 });

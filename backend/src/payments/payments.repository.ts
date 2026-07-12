@@ -10,6 +10,10 @@ export class PaymentsRepository {
     return this.prisma.payment.findUnique({ where: { reservationId } });
   }
 
+  findById(id: number): Promise<Payment | null> {
+    return this.prisma.payment.findUnique({ where: { id } });
+  }
+
   findByStripeEventId(stripeEventId: string): Promise<Payment | null> {
     return this.prisma.payment.findUnique({ where: { stripeEventId } });
   }

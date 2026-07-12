@@ -3,6 +3,7 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  Logger,
   forwardRef,
 } from '@nestjs/common';
 import Stripe from 'stripe';
@@ -18,6 +19,7 @@ const CURRENCY = 'usd';
 
 @Injectable()
 export class PaymentsService {
+  private readonly logger = new Logger(PaymentsService.name);
   private readonly stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
 
   constructor(
@@ -142,14 +144,20 @@ export class PaymentsService {
   private async handleCheckoutCompleted(event: Stripe.Event): Promise<void> {
     const session = event.data.object as Stripe.Checkout.Session;
     const paymentId = this.paymentIdFrom(session);
+    const payment = await this.paymentsRepo.findById(paymentId);
+    if (!payment) return;
 
     if (session.payment_status === 'paid') {
-      const payment = await this.paymentsRepo.update(paymentId, {
+      // Confirm the reservation FIRST, persist stripeEventId only after it
+      // succeeds. If confirmPayment throws, this event is never marked
+      // processed, so a Stripe retry re-enters and retries confirmPayment
+      // (which is a plain idempotent status-set — safe to re-run).
+      await this.reservationsService.confirmPayment(payment.reservationId);
+      await this.paymentsRepo.update(paymentId, {
         status: PaymentStatus.SUCCEEDED,
         stripeEventId: event.id,
         stripePaymentId: session.payment_intent as string,
       });
-      await this.reservationsService.confirmPayment(payment.reservationId);
       return;
     }
 
@@ -182,7 +190,10 @@ export class PaymentsService {
   private async handleDisputeCreated(event: Stripe.Event): Promise<void> {
     const dispute = event.data.object as Stripe.Dispute;
     const payment = await this.paymentsRepo.findByStripePaymentId(dispute.payment_intent as string);
-    if (!payment) return;
+    if (!payment) {
+      this.logger.warn(`Dispute event for unknown stripePaymentId=${dispute.payment_intent}`);
+      return;
+    }
     await this.paymentsRepo.update(payment.id, {
       disputed: true,
       disputeReason: dispute.reason,

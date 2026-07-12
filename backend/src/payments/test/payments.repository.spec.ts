@@ -42,6 +42,18 @@ describe('PaymentsRepository', () => {
     });
   });
 
+  describe('findById', () => {
+    it('looks up by the primary key', async () => {
+      mockPrisma.payment.findUnique.mockResolvedValue({ id: 1 });
+
+      await repo.findById(1);
+
+      expect(mockPrisma.payment.findUnique).toHaveBeenCalledWith({
+        where: { id: 1 },
+      });
+    });
+  });
+
   describe('findByStripeEventId', () => {
     it('looks up by the unique stripeEventId', async () => {
       mockPrisma.payment.findUnique.mockResolvedValue(null);
