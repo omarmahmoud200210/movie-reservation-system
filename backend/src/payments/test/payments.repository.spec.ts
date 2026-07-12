@@ -6,6 +6,7 @@ import { PaymentsRepository } from '../payments.repository';
 const mockPrisma = {
   payment: {
     findUnique: jest.fn(),
+    findFirst: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
     findMany: jest.fn(),
@@ -55,14 +56,23 @@ describe('PaymentsRepository', () => {
 
   describe('findByStripePaymentId', () => {
     it('looks up by stripePaymentId', async () => {
-      mockPrisma.payment.findMany.mockResolvedValue([{ id: 1 }]);
+      mockPrisma.payment.findFirst.mockResolvedValue({ id: 1 });
 
-      await repo.findByStripePaymentId('pi_123');
-
-      expect(mockPrisma.payment.findMany).toHaveBeenCalledWith({
-        where: { stripePaymentId: 'pi_123' },
-        take: 1,
+      await expect(repo.findByStripePaymentId('pi_123')).resolves.toEqual({
+        id: 1,
       });
+
+      expect(mockPrisma.payment.findFirst).toHaveBeenCalledWith({
+        where: { stripePaymentId: 'pi_123' },
+      });
+    });
+
+    it('returns null when no payment matches', async () => {
+      mockPrisma.payment.findFirst.mockResolvedValue(null);
+
+      await expect(
+        repo.findByStripePaymentId('pi_missing'),
+      ).resolves.toBeNull();
     });
   });
 

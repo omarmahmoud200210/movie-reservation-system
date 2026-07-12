@@ -14,14 +14,8 @@ export class PaymentsRepository {
     return this.prisma.payment.findUnique({ where: { stripeEventId } });
   }
 
-  async findByStripePaymentId(
-    stripePaymentId: string,
-  ): Promise<Payment | null> {
-    const [payment] = await this.prisma.payment.findMany({
-      where: { stripePaymentId },
-      take: 1,
-    });
-    return payment ?? null;
+  findByStripePaymentId(stripePaymentId: string): Promise<Payment | null> {
+    return this.prisma.payment.findFirst({ where: { stripePaymentId } });
   }
 
   create(data: Prisma.PaymentUncheckedCreateInput): Promise<Payment> {
