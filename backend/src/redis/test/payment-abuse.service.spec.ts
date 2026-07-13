@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { getToken } from '@willsoto/nestjs-prometheus';
 import PaymentAbuseService from '../payment-abuse.service';
 import RedisCache from '../redis.cache';
 
@@ -11,6 +12,7 @@ const mockClient = {
   exists: jest.fn(),
 };
 const mockRedisCache = { getClient: () => mockClient };
+const mockLockoutsCounter = { inc: jest.fn() };
 
 describe('PaymentAbuseService', () => {
   let service: PaymentAbuseService;
@@ -23,6 +25,10 @@ describe('PaymentAbuseService', () => {
       providers: [
         PaymentAbuseService,
         { provide: RedisCache, useValue: mockRedisCache },
+        {
+          provide: getToken('payment_abuse_lockouts_total'),
+          useValue: mockLockoutsCounter,
+        },
       ],
     }).compile();
 
@@ -80,6 +86,16 @@ describe('PaymentAbuseService', () => {
         0,
         now - 24 * 60 * 60_000,
       );
+    });
+
+    it('increments payment_abuse_lockouts_total only on the 3rd failure', async () => {
+      mockClient.zcard.mockResolvedValue(2);
+      await service.recordFailure(7);
+      expect(mockLockoutsCounter.inc).not.toHaveBeenCalled();
+
+      mockClient.zcard.mockResolvedValue(3);
+      await service.recordFailure(7);
+      expect(mockLockoutsCounter.inc).toHaveBeenCalledTimes(1);
     });
   });
 

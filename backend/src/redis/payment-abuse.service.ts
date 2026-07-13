@@ -1,4 +1,6 @@
 import { Injectable } from '@nestjs/common';
+import { InjectMetric } from '@willsoto/nestjs-prometheus';
+import type { Counter } from 'prom-client';
 import { randomUUID } from 'node:crypto';
 import RedisCache from './redis.cache';
 
@@ -18,7 +20,11 @@ const FAILURE_THRESHOLD = 3;
  */
 @Injectable()
 export default class PaymentAbuseService {
-  constructor(private readonly redis: RedisCache) {}
+  constructor(
+    private readonly redis: RedisCache,
+    @InjectMetric('payment_abuse_lockouts_total')
+    private readonly lockoutsCounter: Counter<string>,
+  ) {}
 
   async recordFailure(userId: number): Promise<void> {
     const key = `payment_failures:user:${userId}`;
@@ -30,6 +36,7 @@ export default class PaymentAbuseService {
     const count = await client.zcard(key);
     if (count >= FAILURE_THRESHOLD) {
       await client.set(`payment_lockout:user:${userId}`, '1', 'PX', LOCKOUT_MS);
+      this.lockoutsCounter.inc();
     }
   }
 
