@@ -4,6 +4,7 @@ import { ReservationsController } from './reservations.controller';
 import { ReservationsService } from './reservations.service';
 import { ReservationsRepository } from './reservations.repository';
 import { ReservationCacheListener } from './listeners/reservation-cache.listener';
+import { ReservationMetricsListener } from './listeners/reservation-metrics.listener';
 
 /**
  * Reservations (HTTP) — hold, cancel, and list a user's seat reservations.
@@ -19,6 +20,7 @@ import { ReservationCacheListener } from './listeners/reservation-cache.listener
     ReservationsService,
     ReservationsRepository,
     ReservationCacheListener,
+    ReservationMetricsListener,
   ],
   exports: [ReservationsService],
 })
