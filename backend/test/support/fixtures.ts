@@ -6,6 +6,7 @@ export async function createHallWithSeats(
 ): Promise<{ hall: Hall; seats: Seat[] }> {
   const rows = opts.rows ?? 2;
   const seatsPerRow = opts.seatsPerRow ?? 5;
+  if (rows > 26) throw new Error('createHallWithSeats: rows > 26 not supported, add base-26 row labels if needed');
 
   const hall = await prisma.hall.create({
     data: { name: opts.name ?? 'E2E Hall', capacity: rows * seatsPerRow },
@@ -22,7 +23,10 @@ export async function createHallWithSeats(
     ),
   });
 
-  const seats = await prisma.seat.findMany({ where: { hallId: hall.id } });
+  const seats = await prisma.seat.findMany({
+    where: { hallId: hall.id },
+    orderBy: [{ row: 'asc' }, { id: 'asc' }],
+  });
   return { hall, seats };
 }
 
