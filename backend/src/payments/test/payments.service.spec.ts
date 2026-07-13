@@ -1,11 +1,17 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Prisma, PaymentStatus, ReservationStatus } from '@prisma/client';
 import { PaymentsService } from '../payments.service';
 import { PaymentsRepository } from '../payments.repository';
 import { ReservationsService } from '../../reservations/reservations.service';
 import { ScreeningsRepository } from '../../screenings/screenings.repository';
 import PaymentAbuseService from '../../redis/payment-abuse.service';
+import {
+  RESERVATION_CANCELLED,
+  RESERVATION_CONFIRMED,
+} from '../../reservations/events/reservation.events';
+import { getToken } from '@willsoto/nestjs-prometheus';
 
 jest.mock('stripe', () => {
   return jest.fn().mockImplementation(() => ({
@@ -30,6 +36,8 @@ const mockPaymentsRepo = {
   delete: jest.fn(),
   findStuckTimedOut: jest.fn(),
   findRefundPolicy: jest.fn(),
+  confirmWithReservation: jest.fn(),
+  declineWithReservation: jest.fn(),
 };
 const mockReservationsService = {
   findOwned: jest.fn(),
@@ -40,6 +48,14 @@ const mockReservationsService = {
 };
 const mockScreeningsRepo = { findById: jest.fn() };
 const mockPaymentAbuse = { recordFailure: jest.fn() };
+const mockEvents = { emit: jest.fn() };
+const mockMetrics = {
+  paymentsSucceeded: { inc: jest.fn() },
+  paymentsFailed: { inc: jest.fn() },
+  paymentsDeclined: { inc: jest.fn() },
+  paymentsTimedOut: { inc: jest.fn() },
+  paymentsRefunded: { inc: jest.fn() },
+};
 
 const screening = { id: 3, price: 50, startTime: new Date('2026-07-10T18:00:00.000Z') };
 const heldReservation = { id: 100, screeningId: 3, seatId: 11, status: ReservationStatus.HELD, userId: 7 };
@@ -60,6 +76,12 @@ describe('PaymentsService', () => {
         { provide: ReservationsService, useValue: mockReservationsService },
         { provide: ScreeningsRepository, useValue: mockScreeningsRepo },
         { provide: PaymentAbuseService, useValue: mockPaymentAbuse },
+        { provide: EventEmitter2, useValue: mockEvents },
+        { provide: getToken('payments_succeeded_total'), useValue: mockMetrics.paymentsSucceeded },
+        { provide: getToken('payments_failed_total'), useValue: mockMetrics.paymentsFailed },
+        { provide: getToken('payments_declined_total'), useValue: mockMetrics.paymentsDeclined },
+        { provide: getToken('payments_timed_out_total'), useValue: mockMetrics.paymentsTimedOut },
+        { provide: getToken('payments_refunded_total'), useValue: mockMetrics.paymentsRefunded },
       ],
     }).compile();
 
@@ -358,6 +380,151 @@ describe('PaymentsService', () => {
         expect.stringContaining('pi_missing'),
       );
     });
+
+    it('increments payments_succeeded_total on a paid checkout.session.completed', async () => {
+      stripeMock.webhooks.constructEvent.mockReturnValue({
+        id: 'evt_metric_1',
+        type: 'checkout.session.completed',
+        data: {
+          object: {
+            payment_status: 'paid',
+            payment_intent: 'pi_1',
+            metadata: { paymentId: '1' },
+          },
+        },
+      });
+      mockPaymentsRepo.findByStripeEventId.mockResolvedValue(null);
+      mockPaymentsRepo.findById.mockResolvedValue({ id: 1, reservationId: 100 });
+      mockPaymentsRepo.update.mockResolvedValue({ id: 1, reservationId: 100 });
+      mockReservationsService.confirmPayment.mockResolvedValue(undefined);
+
+      await service.handleWebhookEvent(rawBody, signature);
+
+      expect(mockMetrics.paymentsSucceeded.inc).toHaveBeenCalledTimes(1);
+    });
+
+    it('increments payments_failed_total on checkout.session.async_payment_failed', async () => {
+      stripeMock.webhooks.constructEvent.mockReturnValue({
+        id: 'evt_metric_2',
+        type: 'checkout.session.async_payment_failed',
+        data: { object: { metadata: { paymentId: '1' } } },
+      });
+      mockPaymentsRepo.findByStripeEventId.mockResolvedValue(null);
+      mockPaymentsRepo.update.mockResolvedValue({ id: 1, reservationId: 100 });
+      mockReservationsService.getById.mockResolvedValue({ id: 100, userId: 7 });
+
+      await service.handleWebhookEvent(rawBody, signature);
+
+      expect(mockMetrics.paymentsFailed.inc).toHaveBeenCalledTimes(1);
+    });
+
+    it('increments payments_timed_out_total on checkout.session.expired', async () => {
+      stripeMock.webhooks.constructEvent.mockReturnValue({
+        id: 'evt_metric_3',
+        type: 'checkout.session.expired',
+        data: { object: { metadata: { paymentId: '1' } } },
+      });
+      mockPaymentsRepo.findByStripeEventId.mockResolvedValue(null);
+      mockPaymentsRepo.update.mockResolvedValue({ id: 1, reservationId: 100 });
+
+      await service.handleWebhookEvent(rawBody, signature);
+
+      expect(mockMetrics.paymentsTimedOut.inc).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('reconcileTimedOutPayments', () => {
+    it('confirms a payment Stripe reports as paid, in one transaction, and emits reservation.confirmed', async () => {
+      mockPaymentsRepo.findStuckTimedOut.mockResolvedValue([
+        { id: 1, reservationId: 100, stripeSessionId: 'cs_1' },
+      ]);
+      stripeMock.checkout.sessions.retrieve.mockResolvedValue({
+        payment_status: 'paid',
+        payment_intent: 'pi_9',
+      });
+      mockPaymentsRepo.confirmWithReservation.mockResolvedValue({
+        payment: { id: 1, reservationId: 100 },
+        reservation: { id: 100, screeningId: 3, seatId: 11 },
+      });
+
+      await service.reconcileTimedOutPayments();
+
+      expect(mockPaymentsRepo.confirmWithReservation).toHaveBeenCalledWith(
+        1,
+        100,
+        'pi_9',
+      );
+      expect(mockEvents.emit).toHaveBeenCalledWith(RESERVATION_CONFIRMED, {
+        screeningId: 3,
+        seatIds: [11],
+      });
+    });
+
+    it('declines a payment Stripe does not report as paid, cancels the reservation in one transaction, records abuse failure, emits reservation.cancelled', async () => {
+      mockPaymentsRepo.findStuckTimedOut.mockResolvedValue([
+        { id: 2, reservationId: 101, stripeSessionId: 'cs_2' },
+      ]);
+      stripeMock.checkout.sessions.retrieve.mockResolvedValue({
+        payment_status: 'unpaid',
+      });
+      mockPaymentsRepo.declineWithReservation.mockResolvedValue({
+        payment: { id: 2, reservationId: 101 },
+        reservation: { id: 101, screeningId: 3, seatId: 12, userId: 7 },
+      });
+
+      await service.reconcileTimedOutPayments();
+
+      expect(mockPaymentsRepo.declineWithReservation).toHaveBeenCalledWith(
+        2,
+        101,
+      );
+      expect(mockEvents.emit).toHaveBeenCalledWith(RESERVATION_CANCELLED, {
+        screeningId: 3,
+        seatIds: [12],
+      });
+      expect(mockPaymentAbuse.recordFailure).toHaveBeenCalledWith(7);
+    });
+
+    it('does nothing when there are no stuck payments', async () => {
+      mockPaymentsRepo.findStuckTimedOut.mockResolvedValue([]);
+
+      await service.reconcileTimedOutPayments();
+
+      expect(stripeMock.checkout.sessions.retrieve).not.toHaveBeenCalled();
+    });
+
+    it('increments payments_succeeded_total on a reconciled paid payment', async () => {
+      mockPaymentsRepo.findStuckTimedOut.mockResolvedValue([
+        { id: 1, reservationId: 100, stripeSessionId: 'cs_1' },
+      ]);
+      stripeMock.checkout.sessions.retrieve.mockResolvedValue({
+        payment_status: 'paid',
+        payment_intent: 'pi_9',
+      });
+      mockPaymentsRepo.confirmWithReservation.mockResolvedValue({
+        payment: { id: 1, reservationId: 100 },
+        reservation: { id: 100, screeningId: 3, seatId: 11 },
+      });
+
+      await service.reconcileTimedOutPayments();
+
+      expect(mockMetrics.paymentsSucceeded.inc).toHaveBeenCalledTimes(1);
+    });
+
+    it('increments payments_declined_total on a reconciled declined payment', async () => {
+      mockPaymentsRepo.findStuckTimedOut.mockResolvedValue([
+        { id: 2, reservationId: 101, stripeSessionId: 'cs_2' },
+      ]);
+      stripeMock.checkout.sessions.retrieve.mockResolvedValue({ payment_status: 'unpaid' });
+      mockPaymentsRepo.declineWithReservation.mockResolvedValue({
+        payment: { id: 2, reservationId: 101 },
+        reservation: { id: 101, screeningId: 3, seatId: 12, userId: 7 },
+      });
+
+      await service.reconcileTimedOutPayments();
+
+      expect(mockMetrics.paymentsDeclined.inc).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('refundReservation', () => {
@@ -458,6 +625,35 @@ describe('PaymentsService', () => {
       await expect(service.refundReservation(confirmed as any)).rejects.toBeInstanceOf(
         NotFoundException,
       );
+    });
+
+    it('increments payments_refunded_total on a real refund, not on the idempotent short-circuit', async () => {
+      mockPaymentsRepo.findByReservationId.mockResolvedValue({
+        ...payment,
+        status: PaymentStatus.SUCCEEDED,
+      });
+      mockScreeningsRepo.findById.mockResolvedValue({
+        ...screening,
+        startTime: new Date(Date.now() + 72 * 60 * 60_000),
+      });
+      mockPaymentsRepo.findRefundPolicy.mockResolvedValue({ refundPercent: 100 });
+      stripeMock.refunds.create.mockResolvedValue({ id: 're_1' });
+      mockReservationsService.finalizeCancel.mockResolvedValue({ ...confirmed, status: 'CANCELLED' });
+
+      await service.refundReservation(confirmed as any);
+
+      expect(mockMetrics.paymentsRefunded.inc).toHaveBeenCalledTimes(1);
+
+      jest.clearAllMocks();
+      mockPaymentsRepo.findByReservationId.mockResolvedValue({
+        ...payment,
+        status: PaymentStatus.REFUNDED,
+      });
+      mockReservationsService.finalizeCancel.mockResolvedValue({ ...confirmed, status: 'CANCELLED' });
+
+      await service.refundReservation(confirmed as any);
+
+      expect(mockMetrics.paymentsRefunded.inc).not.toHaveBeenCalled();
     });
   });
 });

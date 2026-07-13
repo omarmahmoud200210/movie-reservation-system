@@ -8,13 +8,27 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import Stripe from 'stripe';
-import { Payment, Prisma, PaymentStatus, Reservation, ReservationStatus } from '@prisma/client';
+import {
+  Payment,
+  Prisma,
+  PaymentStatus,
+  Reservation,
+  ReservationStatus,
+} from '@prisma/client';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { InjectMetric } from '@willsoto/nestjs-prometheus';
+import type { Counter } from 'prom-client';
 import { PaymentsRepository } from './payments.repository';
 import { ReservationsService } from '../reservations/reservations.service';
 import { ScreeningsRepository } from '../screenings/screenings.repository';
 import PaymentAbuseService from '../redis/payment-abuse.service';
+import {
+  RESERVATION_CANCELLED,
+  RESERVATION_CONFIRMED,
+} from '../reservations/events/reservation.events';
 
 const CHECKOUT_EXPIRY_MINUTES = 30;
+const RECONCILE_GRACE_MINUTES = 10;
 // ponytail: 'usd' while testing — flip to 'egp' once EGP is confirmed chargeable on the Stripe account.
 const CURRENCY = 'usd';
 
@@ -29,13 +43,27 @@ export class PaymentsService {
     private readonly reservationsService: ReservationsService,
     private readonly screeningsRepo: ScreeningsRepository,
     private readonly paymentAbuse: PaymentAbuseService,
+    private readonly events: EventEmitter2,
+    @InjectMetric('payments_succeeded_total')
+    private readonly paymentsSucceeded: Counter<string>,
+    @InjectMetric('payments_failed_total')
+    private readonly paymentsFailed: Counter<string>,
+    @InjectMetric('payments_declined_total')
+    private readonly paymentsDeclined: Counter<string>,
+    @InjectMetric('payments_timed_out_total')
+    private readonly paymentsTimedOut: Counter<string>,
+    @InjectMetric('payments_refunded_total')
+    private readonly paymentsRefunded: Counter<string>,
   ) {}
 
   async createCheckoutSession(
     userId: number,
     reservationId: number,
   ): Promise<{ url: string }> {
-    const reservation = await this.reservationsService.findOwned(userId, reservationId);
+    const reservation = await this.reservationsService.findOwned(
+      userId,
+      reservationId,
+    );
     if (reservation.status !== ReservationStatus.HELD) {
       throw new ConflictException('Reservation is not held');
     }
@@ -44,7 +72,9 @@ export class PaymentsService {
       throw new ConflictException('This reservation already has a payment');
     }
 
-    const screening = await this.screeningsRepo.findById(reservation.screeningId);
+    const screening = await this.screeningsRepo.findById(
+      reservation.screeningId,
+    );
     if (!screening) {
       throw new ConflictException('Screening no longer exists');
     }
@@ -70,7 +100,8 @@ export class PaymentsService {
     }
 
     try {
-      const expiresAt = Math.floor(Date.now() / 1000) + CHECKOUT_EXPIRY_MINUTES * 60;
+      const expiresAt =
+        Math.floor(Date.now() / 1000) + CHECKOUT_EXPIRY_MINUTES * 60;
       const session = await this.stripe.checkout.sessions.create({
         mode: 'payment',
         line_items: [
@@ -89,8 +120,13 @@ export class PaymentsService {
         metadata: { paymentId: String(payment.id) },
       });
 
-      await this.paymentsRepo.update(payment.id, { stripeSessionId: session.id });
-      await this.reservationsService.extendHold(reservationId, new Date(expiresAt * 1000));
+      await this.paymentsRepo.update(payment.id, {
+        stripeSessionId: session.id,
+      });
+      await this.reservationsService.extendHold(
+        reservationId,
+        new Date(expiresAt * 1000),
+      );
 
       return { url: session.url as string };
     } catch (err) {
@@ -99,7 +135,10 @@ export class PaymentsService {
     }
   }
 
-  async handleWebhookEvent(rawBody: Buffer, signature: string): Promise<{ received: true }> {
+  async handleWebhookEvent(
+    rawBody: Buffer,
+    signature: string,
+  ): Promise<{ received: true }> {
     let event: Stripe.Event;
     try {
       event = this.stripe.webhooks.constructEvent(
@@ -113,7 +152,9 @@ export class PaymentsService {
       );
     }
 
-    const alreadyProcessed = await this.paymentsRepo.findByStripeEventId(event.id);
+    const alreadyProcessed = await this.paymentsRepo.findByStripeEventId(
+      event.id,
+    );
     if (alreadyProcessed) {
       return { received: true };
     }
@@ -159,6 +200,7 @@ export class PaymentsService {
         stripeEventId: event.id,
         stripePaymentId: session.payment_intent as string,
       });
+      this.paymentsSucceeded.inc();
       return;
     }
 
@@ -175,8 +217,11 @@ export class PaymentsService {
       status: PaymentStatus.FAILED,
       stripeEventId: event.id,
     });
-    const reservation = await this.reservationsService.getById(payment.reservationId);
+    const reservation = await this.reservationsService.getById(
+      payment.reservationId,
+    );
     await this.paymentAbuse.recordFailure(reservation.userId);
+    this.paymentsFailed.inc();
   }
 
   private async handleCheckoutExpired(event: Stripe.Event): Promise<void> {
@@ -186,13 +231,18 @@ export class PaymentsService {
       status: PaymentStatus.TIMED_OUT,
       stripeEventId: event.id,
     });
+    this.paymentsTimedOut.inc();
   }
 
   private async handleDisputeCreated(event: Stripe.Event): Promise<void> {
     const dispute = event.data.object as Stripe.Dispute;
-    const payment = await this.paymentsRepo.findByStripePaymentId(dispute.payment_intent as string);
+    const payment = await this.paymentsRepo.findByStripePaymentId(
+      dispute.payment_intent as string,
+    );
     if (!payment) {
-      this.logger.warn(`Dispute event for unknown stripePaymentId=${dispute.payment_intent}`);
+      this.logger.warn(
+        `Dispute event for unknown stripePaymentId=${dispute.payment_intent}`,
+      );
       return;
     }
     await this.paymentsRepo.update(payment.id, {
@@ -206,7 +256,9 @@ export class PaymentsService {
   async refundReservation(reservation: Reservation): Promise<Reservation> {
     const payment = await this.paymentsRepo.findByReservationId(reservation.id);
     if (!payment) {
-      throw new NotFoundException(`No payment found for reservation ${reservation.id}`);
+      throw new NotFoundException(
+        `No payment found for reservation ${reservation.id}`,
+      );
     }
 
     // Already refunded (e.g. a retry after the Stripe call succeeded but a
@@ -216,12 +268,16 @@ export class PaymentsService {
       return this.reservationsService.finalizeCancel(reservation);
     }
 
-    const screening = await this.screeningsRepo.findById(reservation.screeningId);
+    const screening = await this.screeningsRepo.findById(
+      reservation.screeningId,
+    );
     if (!screening) {
       throw new ConflictException('Screening no longer exists');
     }
-    const hoursUntilScreening = (screening.startTime.getTime() - Date.now()) / (60 * 60 * 1000);
-    const policy = await this.paymentsRepo.findRefundPolicy(hoursUntilScreening);
+    const hoursUntilScreening =
+      (screening.startTime.getTime() - Date.now()) / (60 * 60 * 1000);
+    const policy =
+      await this.paymentsRepo.findRefundPolicy(hoursUntilScreening);
     const refundPercent = policy?.refundPercent ?? 0;
     const refundAmount = Math.round((payment.amount * refundPercent) / 100);
 
@@ -243,6 +299,7 @@ export class PaymentsService {
         refundId,
         refundedAt: new Date(),
       });
+      this.paymentsRefunded.inc();
 
       return await this.reservationsService.finalizeCancel(reservation);
     } catch (err) {
@@ -251,5 +308,58 @@ export class PaymentsService {
       );
       throw err;
     }
+  }
+
+  async reconcileTimedOutPayments(): Promise<void> {
+    const cutoff = new Date(Date.now() - RECONCILE_GRACE_MINUTES * 60_000);
+    const stuck = await this.paymentsRepo.findStuckTimedOut(cutoff);
+
+    for (const payment of stuck) {
+      const session = await this.stripe.checkout.sessions.retrieve(
+        payment.stripeSessionId,
+      );
+
+      if (session.payment_status === 'paid') {
+        const { reservation } = await this.paymentsRepo.confirmWithReservation(
+          payment.id,
+          payment.reservationId,
+          session.payment_intent as string,
+        );
+        this.paymentsSucceeded.inc();
+        this.events.emit(RESERVATION_CONFIRMED, {
+          screeningId: reservation.screeningId,
+          seatIds: [reservation.seatId],
+        });
+      } else {
+        const { reservation } = await this.paymentsRepo.declineWithReservation(
+          payment.id,
+          payment.reservationId,
+        );
+        this.paymentsDeclined.inc();
+        this.events.emit(RESERVATION_CANCELLED, {
+          screeningId: reservation.screeningId,
+          seatIds: [reservation.seatId],
+        });
+        await this.paymentAbuse.recordFailure(reservation.userId);
+      }
+    }
+  }
+
+  async getStatus(
+    userId: number,
+    reservationId: number,
+  ): Promise<{
+    reservationStatus: ReservationStatus;
+    paymentStatus: PaymentStatus | null;
+  }> {
+    const reservation = await this.reservationsService.findOwned(
+      userId,
+      reservationId,
+    );
+    const payment = await this.paymentsRepo.findByReservationId(reservationId);
+    return {
+      reservationStatus: reservation.status,
+      paymentStatus: payment?.status ?? null,
+    };
   }
 }
