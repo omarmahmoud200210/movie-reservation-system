@@ -79,18 +79,21 @@ describe('Reservations (e2e)', () => {
     const { seats, screening } = await seedScreening();
     const user = await createAuthedUser(prisma);
     const socket = await connectSocket(baseUrl(app));
-    await joinScreening(socket, screening.id);
-    const broadcast = waitForEvent<{ seatIds: number[]; status: string }>(socket, 'seat:reserved');
+    try {
+      await joinScreening(socket, screening.id);
+      const broadcast = waitForEvent<{ seatIds: number[]; status: string }>(socket, 'seat:reserved');
 
-    await request(app.getHttpServer())
-      .post('/api/v1/reservations')
-      .set('Cookie', user.cookie)
-      .send({ screeningId: screening.id, seatId: seats[0].id });
+      await request(app.getHttpServer())
+        .post('/api/v1/reservations')
+        .set('Cookie', user.cookie)
+        .send({ screeningId: screening.id, seatId: seats[0].id });
 
-    const payload = await broadcast;
-    expect(payload.seatIds).toEqual([seats[0].id]);
-    expect(payload.status).toBe('HELD');
-    socket.disconnect();
+      const payload = await broadcast;
+      expect(payload.seatIds).toEqual([seats[0].id]);
+      expect(payload.status).toBe('HELD');
+    } finally {
+      socket.disconnect();
+    }
   });
 
   it('hold-expiry cron releases an expired HELD reservation and broadcasts seat:cancelled', async () => {
@@ -108,19 +111,22 @@ describe('Reservations (e2e)', () => {
     });
 
     const socket = await connectSocket(baseUrl(app));
-    await joinScreening(socket, screening.id);
-    const broadcast = waitForEvent<{ seatIds: number[] }>(socket, 'seat:cancelled');
+    try {
+      await joinScreening(socket, screening.id);
+      const broadcast = waitForEvent<{ seatIds: number[] }>(socket, 'seat:cancelled');
 
-    const cron = app.get(HoldExpiryCron);
-    await cron.handleExpireHolds();
+      const cron = app.get(HoldExpiryCron);
+      await cron.handleExpireHolds();
 
-    const payload = await broadcast;
-    expect(payload.seatIds).toEqual([seats[0].id]);
+      const payload = await broadcast;
+      expect(payload.seatIds).toEqual([seats[0].id]);
 
-    const reservation = await prisma.reservation.findUniqueOrThrow({
-      where: { id: reserveRes.body.id },
-    });
-    expect(reservation.status).toBe(ReservationStatus.CANCELLED);
-    socket.disconnect();
+      const reservation = await prisma.reservation.findUniqueOrThrow({
+        where: { id: reserveRes.body.id },
+      });
+      expect(reservation.status).toBe(ReservationStatus.CANCELLED);
+    } finally {
+      socket.disconnect();
+    }
   });
 });
