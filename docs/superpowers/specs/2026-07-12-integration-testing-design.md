@@ -35,11 +35,14 @@ the whole `test/` directory) doesn't exist yet. Standard Nest e2e Jest config: `
 **Running locally:**
 ```bash
 cd backend
-docker compose -f docker-compose.test.yml up -d
-npx prisma migrate deploy   # against .env.test's DATABASE_URL
 npm run test:e2e
-docker compose -f docker-compose.test.yml down
 ```
+
+Postgres and Redis are no longer managed via `docker-compose.test.yml` — Testcontainers now
+starts (and, since containers run with `.withReuse()`, keeps alive across runs) both containers
+from Jest's `globalSetup`, runs `prisma migrate deploy` against the resolved connection string,
+and writes it to a gitignored runtime env file that overrides `.env.test`. See
+`feat/payments-phase9`, `backend/test/global-setup.ts`.
 
 ---
 

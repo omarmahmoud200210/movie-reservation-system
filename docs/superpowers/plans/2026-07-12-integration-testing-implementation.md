@@ -189,13 +189,15 @@ instead of relying on `dotenv.config`'s no-override default) before continuing t
 
 - [ ] **Step 7: Bring up the test containers and migrate**
 
+Superseded: Postgres/Redis are no longer brought up via `docker-compose.test.yml`. Testcontainers
+now starts both containers (reused across runs via `.withReuse()`) from Jest's `globalSetup` and
+runs `prisma migrate deploy` against the resolved connection string automatically — see
+`feat/payments-phase9`, `backend/test/global-setup.ts`. Just run:
+
 ```bash
 cd backend
-docker compose -f docker-compose.test.yml up -d
-npx dotenv -e .env.test -- npx prisma migrate deploy
+npm run test:e2e
 ```
-Expected: containers start, migrations apply cleanly to `movie_reservation_test`. If `npx dotenv` isn't
-available, run `DATABASE_URL="postgresql://postgres:postgres@localhost:5433/movie_reservation_test" npx prisma migrate deploy` instead (same effect, explicit env var).
 
 - [ ] **Step 8: Commit**
 
@@ -1489,13 +1491,11 @@ include:
 ```markdown
 ## End-to-end tests
 
-Requires Docker for a dedicated test Postgres + Redis (separate from dev):
+Requires Docker. Testcontainers starts a dedicated test Postgres + Redis automatically (separate
+from dev) via Jest's `globalSetup`, runs migrations, and reuses the containers across runs:
 
     cd backend
-    docker compose -f docker-compose.test.yml up -d
-    npx prisma migrate deploy --schema prisma/schema.prisma  # against .env.test's DATABASE_URL
     npm run test:e2e
-    docker compose -f docker-compose.test.yml down
 ```
 
 - [ ] **Step 4: Commit**
