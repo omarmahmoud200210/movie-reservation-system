@@ -1,6 +1,7 @@
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { PrismaClient } from '@prisma/client';
+import Stripe from 'stripe';
 import { createTestApp } from './support/app';
 import { resetState, closeRedis } from './support/db';
 import { createTestPrismaClient } from './support/prisma';
@@ -32,7 +33,6 @@ describe('e2e harness sanity check', () => {
   });
 
   it('the Stripe mock is active (webhooks real, API calls stubbed)', async () => {
-    const Stripe = (await import('stripe')).default;
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
     expect(jest.isMockFunction(stripe.checkout.sessions.create)).toBe(true);
     expect(typeof stripe.webhooks.constructEvent).toBe('function');
