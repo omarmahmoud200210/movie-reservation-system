@@ -1,5 +1,13 @@
 import { spawn, execFileSync } from 'child_process';
 
+// shell: true is required below, not just convenient: on Windows the Stripe CLI installs as a
+// .cmd shim, and Windows' CreateProcess() cannot execute .cmd/.bat files directly — spawn/
+// execFileSync throw EINVAL without a shell to interpret them (naming "stripe.cmd" explicitly
+// doesn't help; this is a Node/Windows limitation, not a PATH resolution issue). This is safe
+// here because every argument is locally-sourced and non-adversarial: forwardToUrl is built
+// internally from the test's own 127.0.0.1 server address, apiKey comes from a gitignored local
+// file the developer controls, and paymentId is a DB-generated number — none of this is
+// user/network input, so there's no injection surface despite shell:true.
 const READY_LINE = /Ready! You are using Stripe API Version .* Your webhook signing secret is (whsec_\w+)/;
 
 export interface WebhookRelay {
@@ -20,7 +28,7 @@ export function startWebhookRelay(
     const child = spawn(
       'stripe',
       ['listen', '--forward-to', forwardToUrl, '--api-key', apiKey, '--skip-update'],
-      { stdio: ['ignore', 'pipe', 'pipe'] },
+      { stdio: ['ignore', 'pipe', 'pipe'], shell: true },
     );
 
     const timer = setTimeout(() => {
@@ -67,8 +75,7 @@ export function triggerCheckoutCompleted(paymentId: number, apiKey: string): voi
       `checkout_session:metadata.paymentId=${paymentId}`,
       '--api-key',
       apiKey,
-      '--skip-update',
     ],
-    { stdio: 'inherit' },
+    { stdio: 'inherit', shell: true },
   );
 }

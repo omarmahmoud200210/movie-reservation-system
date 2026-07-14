@@ -34,7 +34,7 @@ describe('Payments (live Stripe e2e)', () => {
   });
 
   afterAll(async () => {
-    relay.stop();
+    relay?.stop();
     await closeRedis();
     await prisma.$disconnect();
     await app.close();
