@@ -2,6 +2,8 @@ node_modules/
 
 .env
 
+backend/test/.env.test.runtime
+
 dist/
 
 .worktrees/
