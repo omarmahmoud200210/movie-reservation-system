@@ -11,9 +11,13 @@ const mockPrisma = {
     update: jest.fn(),
     findMany: jest.fn(),
   },
+  reservation: {
+    update: jest.fn(),
+  },
   refundPolicy: {
     findFirst: jest.fn(),
   },
+  $transaction: jest.fn(),
 };
 
 describe('PaymentsRepository', () => {
@@ -141,6 +145,57 @@ describe('PaymentsRepository', () => {
 
       expect(mockPrisma.refundPolicy.findFirst).toHaveBeenCalledWith({
         where: { hoursFrom: { lte: 30 }, hoursTo: { gt: 30 } },
+      });
+    });
+  });
+
+  describe('confirmWithReservation', () => {
+    it('confirms the payment and the reservation in one transaction', async () => {
+      const payment = { id: 1, status: PaymentStatus.SUCCEEDED };
+      const reservation = { id: 100, status: 'CONFIRMED' };
+      mockPrisma.payment.update.mockReturnValue(payment);
+      mockPrisma.reservation.update.mockReturnValue(reservation);
+      mockPrisma.$transaction.mockResolvedValue([payment, reservation]);
+
+      await expect(
+        repo.confirmWithReservation(1, 100, 'pi_9'),
+      ).resolves.toEqual({ payment, reservation });
+
+      expect(mockPrisma.payment.update).toHaveBeenCalledWith({
+        where: { id: 1 },
+        data: { status: PaymentStatus.SUCCEEDED, stripePaymentId: 'pi_9' },
+      });
+      expect(mockPrisma.reservation.update).toHaveBeenCalledWith({
+        where: { id: 100 },
+        data: { status: 'CONFIRMED', heldUntil: null },
+      });
+      expect(mockPrisma.$transaction).toHaveBeenCalledWith([
+        payment,
+        reservation,
+      ]);
+    });
+  });
+
+  describe('declineWithReservation', () => {
+    it('declines the payment and cancels the reservation in one transaction', async () => {
+      const payment = { id: 2, status: PaymentStatus.DECLINED };
+      const reservation = { id: 101, status: 'CANCELLED' };
+      mockPrisma.payment.update.mockReturnValue(payment);
+      mockPrisma.reservation.update.mockReturnValue(reservation);
+      mockPrisma.$transaction.mockResolvedValue([payment, reservation]);
+
+      await expect(repo.declineWithReservation(2, 101)).resolves.toEqual({
+        payment,
+        reservation,
+      });
+
+      expect(mockPrisma.payment.update).toHaveBeenCalledWith({
+        where: { id: 2 },
+        data: { status: PaymentStatus.DECLINED },
+      });
+      expect(mockPrisma.reservation.update).toHaveBeenCalledWith({
+        where: { id: 101 },
+        data: { status: 'CANCELLED' },
       });
     });
   });

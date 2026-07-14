@@ -1,4 +1,3 @@
-// backend/test/payments.e2e-spec.ts
 import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { PrismaClient, PaymentStatus, ReservationStatus } from '@prisma/client';
@@ -10,7 +9,6 @@ import { connectSocket, joinScreening, waitForEvent } from './support/socket';
 import { signWebhookPayload } from './support/stripe-webhook';
 import { createTestPrismaClient } from './support/prisma';
 import { PaymentsService } from '../src/payments/payments.service';
-import Stripe from 'stripe';
 
 describe('Payments (e2e)', () => {
   let app: INestApplication;
@@ -123,7 +121,6 @@ describe('Payments (e2e)', () => {
   });
 
   it('rejects a webhook with a bad signature with 400 and does not change payment status', async () => {
-    const { reservationId } = await seedHeldReservation(new Date(Date.now() + 72 * 60 * 60_000));
     stripeMock.checkout.sessions.create.mockResolvedValue({
       id: 'cs_test_3',
       url: 'https://checkout.stripe.com/cs_test_3',
@@ -133,7 +130,7 @@ describe('Payments (e2e)', () => {
       .post('/api/v1/payments/webhook')
       .set('stripe-signature', 'not_a_real_signature')
       .set('Content-Type', 'application/json')
-      .send(Buffer.from(JSON.stringify({ id: 'evt_bad', type: 'checkout.session.completed' })));
+      .send(JSON.stringify({ id: 'evt_bad', type: 'checkout.session.completed' }));
 
     expect(res.status).toBe(400);
   });

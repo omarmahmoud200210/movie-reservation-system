@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { Payment, Prisma, PaymentStatus, RefundPolicy } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { Reservation, ReservationStatus } from '@prisma/client';
 
 @Injectable()
 export class PaymentsRepository {
@@ -50,5 +51,43 @@ export class PaymentsRepository {
         hoursTo: { gt: hoursUntilScreening },
       },
     });
+  }
+
+  async declineWithReservation(
+    paymentId: number,
+    reservationId: number,
+  ): Promise<{ payment: Payment; reservation: Reservation }> {
+    const [payment, reservation] = await this.prisma.$transaction([
+      this.prisma.payment.update({
+        where: { id: paymentId },
+        data: { status: PaymentStatus.DECLINED },
+      }),
+      this.prisma.reservation.update({
+        where: { id: reservationId },
+        data: { status: ReservationStatus.CANCELLED },
+      }),
+    ]);
+    return { payment, reservation };
+  }
+
+  async confirmWithReservation(
+    paymentId: number,
+    reservationId: number,
+    stripePaymentId: string,
+  ): Promise<{ payment: Payment; reservation: Reservation }> {
+    const [payment, reservation] = await this.prisma.$transaction([
+      this.prisma.payment.update({
+        where: { id: paymentId },
+        data: {
+          status: PaymentStatus.SUCCEEDED,
+          stripePaymentId,
+        },
+      }),
+      this.prisma.reservation.update({
+        where: { id: reservationId },
+        data: { status: ReservationStatus.CONFIRMED, heldUntil: null },
+      }),
+    ]);
+    return { payment, reservation };
   }
 }

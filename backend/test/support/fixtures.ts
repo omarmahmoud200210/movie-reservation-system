@@ -1,4 +1,12 @@
-import { PrismaClient, MovieStatus, ScreenStatus, Hall, Movie, Screening, Seat } from '@prisma/client';
+import {
+  PrismaClient,
+  MovieStatus,
+  ScreenStatus,
+  Hall,
+  Movie,
+  Screening,
+  Seat,
+} from '@prisma/client';
 
 export async function createHallWithSeats(
   prisma: PrismaClient,
@@ -6,13 +14,18 @@ export async function createHallWithSeats(
 ): Promise<{ hall: Hall; seats: Seat[] }> {
   const rows = opts.rows ?? 2;
   const seatsPerRow = opts.seatsPerRow ?? 5;
-  if (rows > 26) throw new Error('createHallWithSeats: rows > 26 not supported, add base-26 row labels if needed');
+  if (rows > 26)
+    throw new Error(
+      'createHallWithSeats: rows > 26 not supported, add base-26 row labels if needed',
+    );
 
   const hall = await prisma.hall.create({
     data: { name: opts.name ?? 'E2E Hall', capacity: rows * seatsPerRow },
   });
 
-  const rowLabels = Array.from({ length: rows }, (_, i) => String.fromCharCode(65 + i));
+  const rowLabels = Array.from({ length: rows }, (_, i) =>
+    String.fromCharCode(65 + i),
+  );
   await prisma.seat.createMany({
     data: rowLabels.flatMap((row) =>
       Array.from({ length: seatsPerRow }, (_, i) => ({

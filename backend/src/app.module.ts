@@ -16,6 +16,7 @@ import { ReservationsModule } from './reservations/reservations.module';
 import { GatewayModule } from './gateway/gateway.module';
 import { UsersModule } from './users/users.module';
 import { CronModule } from './cron/cron.module';
+import { PaymentsModule } from './payments/payments.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { CronModule } from './cron/cron.module';
     UsersModule,
     GatewayModule,
     CronModule,
+    PaymentsModule,
   ],
   providers: [{ provide: APP_INTERCEPTOR, useClass: MetricsInterceptor }],
 })

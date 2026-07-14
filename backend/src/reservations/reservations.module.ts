@@ -1,5 +1,6 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { ScreeningsModule } from '../screenings/screenings.module';
+import { PaymentsModule } from '../payments/payments.module';
 import { ReservationsController } from './reservations.controller';
 import { ReservationsService } from './reservations.service';
 import { ReservationsRepository } from './reservations.repository';
@@ -14,7 +15,7 @@ import { ReservationMetricsListener } from './listeners/reservation-metrics.list
  * the cron module can trigger `expireHolds` on a schedule.
  */
 @Module({
-  imports: [ScreeningsModule],
+  imports: [ScreeningsModule, forwardRef(() => PaymentsModule)],
   controllers: [ReservationsController],
   providers: [
     ReservationsService,

@@ -1,8 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { HoldExpiryCron } from '../hold-expiry.cron';
 import { ReservationsService } from '../../reservations/reservations.service';
+import { PaymentsService } from '../../payments/payments.service';
 
 const mockReservationsService = { expireHolds: jest.fn() };
+const mockPaymentsService = { reconcileTimedOutPayments: jest.fn() };
 
 describe('HoldExpiryCron', () => {
   let cron: HoldExpiryCron;
@@ -14,6 +16,7 @@ describe('HoldExpiryCron', () => {
       providers: [
         HoldExpiryCron,
         { provide: ReservationsService, useValue: mockReservationsService },
+        { provide: PaymentsService, useValue: mockPaymentsService },
       ],
     }).compile();
 
@@ -34,5 +37,21 @@ describe('HoldExpiryCron', () => {
     );
 
     await expect(cron.handleExpireHolds()).resolves.toBeUndefined();
+  });
+
+  it('calls PaymentsService.reconcileTimedOutPayments', async () => {
+    mockPaymentsService.reconcileTimedOutPayments.mockResolvedValue(undefined);
+
+    await cron.handleReconcilePayments();
+
+    expect(mockPaymentsService.reconcileTimedOutPayments).toHaveBeenCalledTimes(1);
+  });
+
+  it('swallows a reconciliation failure instead of throwing', async () => {
+    mockPaymentsService.reconcileTimedOutPayments.mockRejectedValue(
+      new Error('Stripe down'),
+    );
+
+    await expect(cron.handleReconcilePayments()).resolves.toBeUndefined();
   });
 });

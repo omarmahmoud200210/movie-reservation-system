@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ReservationsModule } from '../reservations/reservations.module';
+import { PaymentsModule } from '../payments/payments.module';
 import { HoldExpiryCron } from './hold-expiry.cron';
 
 /**
@@ -9,7 +10,7 @@ import { HoldExpiryCron } from './hold-expiry.cron';
  * domain service.
  */
 @Module({
-  imports: [ReservationsModule],
+  imports: [ReservationsModule, PaymentsModule],
   providers: [HoldExpiryCron],
 })
 export class CronModule {}
