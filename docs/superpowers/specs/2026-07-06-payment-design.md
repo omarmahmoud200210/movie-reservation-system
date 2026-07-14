@@ -53,14 +53,16 @@ change, since a `reserve()` call now only ever produces one `Reservation` to pay
 
 **2. `Screening.price` unit — document it, no schema change.**
 `price` is a bare `Int` with no unit comment, and existing test fixtures use values like `10`, `20`,
-`50`, `80` — round numbers consistent with whole currency units (EGP), not piastres. `Payment.amount`
-(per `architecture.md`, "in cents/piastres, NEVER floats") is therefore **derived**, not stored raw:
-`amount = screening.price * 100`. Stated explicitly here so it isn't left as an implicit assumption in
-the implementation.
+`50`, `80` — round numbers consistent with whole currency units, not cents. `Payment.amount` (per
+`architecture.md`, "in cents/piastres, NEVER floats") is therefore **derived**, not stored raw: `amount =
+screening.price * 100`. Stated explicitly here so it isn't left as an implicit assumption in the
+implementation.
 
-**Currency is fixed to EGP** — no `PAYMENT_CURRENCY` env var, no per-user/locale selection. `currency:
-'egp'` is a constant in `PaymentsService`, not configuration, since there is exactly one value it will
-ever take.
+**Currency is a fixed constant, currently `'usd'`** — no `PAYMENT_CURRENCY` env var, no per-user/locale
+selection. `currency: 'usd'` lives as a single constant in `PaymentsService`, not configuration, since
+there is exactly one value it will ever take at a time. Set to USD for now during testing (avoids
+depending on confirming EGP support on the Stripe test account first) — flip the one constant to `'egp'`
+once that's verified, no other code changes needed.
 
 ## Why the `heldUntil` extension (not a new `ReservationStatus`)
 
@@ -97,7 +99,7 @@ cron's next tick runs — no special-casing needed there either.
 - Extending `HoldExpiryCron` with the reconciliation job (the placeholder comment there).
 
 **Out:**
-- Multi-currency — `currency` is a fixed `'egp'` constant, not configuration.
+- Multi-currency — `currency` is a fixed constant (`'usd'` for now), not configuration.
 - Multi-seat checkout / partial-seat cancellation — moot now that `reserve()` is single-seat; each
   `Payment` covers exactly one `Reservation`.
 - Recording the *actual* refunded amount for a partial refund as its own column — `Payment` already has
@@ -149,7 +151,7 @@ from `RedisModule`), not through `PaymentsService` directly. No circular module 
 2. Reject (409) if it isn't `HELD` or a `Payment` row already exists for it (`Payment.reservationId` is
    `@unique`, so this is a `PaymentsRepository.findByReservationId(id)` lookup, not a field on
    `Reservation` — the FK lives on `Payment`, unchanged from the schema as it exists today).
-3. `amount = screening.price * 100`, `currency = 'egp'`.
+3. `amount = screening.price * 100`, `currency = 'usd'`.
 4. Create the `Payment` row (`status: PENDING`, `reservationId`) in one transaction (mirrors the
    transactional style already in `reservations.repository.ts`).
 5. Call `stripe.checkout.sessions.create({ mode: 'payment', line_items: [...], success_url:
@@ -285,7 +287,7 @@ Every 5 min → find Payment where status = 'TIMED_OUT' AND createdAt < NOW() - 
 - **Multi-seat booking**: paying for several seats in one Stripe Checkout Session — would require
   reintroducing seat selection in `reserve()` and a `Payment` 1:many relation; explicitly out for now
   per this session's direction.
-- **Multi-currency**: EGP is hardcoded; per-locale currency is a real feature if this app ever serves
+- **Multi-currency**: the currency constant is hardcoded (`'usd'` for now, `'egp'` once verified); per-locale currency is a real feature if this app ever serves
   multiple regions, not built now.
 - **Refunded-amount auditing**: if a dispute or support case ever needs the exact historical refunded
   amount without calling Stripe, add a `refundedAmount` column then — not speculatively now.

@@ -31,13 +31,11 @@ for exactly this case, not a workaround. `PaymentAbuseService` lives in `RedisMo
 
 ## ⚠️ Before starting: things only you can do
 
-**1. Verify your Stripe account can actually charge in EGP.** Stripe's list of supported countries for
-receiving payouts and its list of presentment currencies you can *charge in* are different things, and
-don't always overlap for every account. In the Stripe Dashboard (test mode is fine for now): **Settings →
-Business settings → your account's supported currencies**, or just try creating a test Checkout Session
-in EGP via the dashboard's payment links tool. If EGP isn't chargeable on your account, tell me before
-Task 9 — the fix is small (e.g. settle in USD, display EGP) but changes the `currency` constant and a test
-fixture.
+**1. ~~Verify your Stripe account can actually charge in EGP~~ — not needed yet.** Currency is set to
+`'usd'` for now (testing), so this check is deferred. When you're ready to switch to EGP, check the
+Stripe Dashboard (**Settings → Business settings → your account's supported currencies**) or try a test
+Checkout Session in EGP via the dashboard's payment links tool, then flip the one `CURRENCY` constant in
+`payments.service.ts` (Task 9) — no other code changes needed.
 
 **2. Register the webhook endpoint** (needed before Task 10 is testable end-to-end, not before starting):
 Stripe Dashboard → Developers → Webhooks → Add endpoint. URL: `<your ngrok/tunnel URL or deployed
@@ -1182,7 +1180,7 @@ describe('PaymentsRepository', () => {
       const data = {
         reservationId: 100,
         amount: 5000,
-        currency: 'egp',
+        currency: 'usd',
         status: PaymentStatus.PENDING,
         stripeSessionId: '',
       };
@@ -1398,7 +1396,7 @@ describe('PaymentsService', () => {
         expect.objectContaining({
           reservationId: 100,
           amount: 5000,
-          currency: 'egp',
+          currency: 'usd',
           status: PaymentStatus.PENDING,
         }),
       );
@@ -1472,7 +1470,8 @@ import { ScreeningsRepository } from '../screenings/screenings.repository';
 import PaymentAbuseService from '../redis/payment-abuse.service';
 
 const CHECKOUT_EXPIRY_MINUTES = 30;
-const CURRENCY = 'egp';
+// ponytail: 'usd' while testing — flip to 'egp' once EGP is confirmed chargeable on the Stripe account.
+const CURRENCY = 'usd';
 
 @Injectable()
 export class PaymentsService {
@@ -2440,6 +2439,7 @@ const RECONCILE_GRACE_MINUTES = 10;
           status: PaymentStatus.DECLINED,
         });
         const reservation = await this.reservationsService.getById(updated.reservationId);
+
         await this.paymentAbuse.recordFailure(reservation.userId);
       }
     }

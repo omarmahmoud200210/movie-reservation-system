@@ -585,10 +585,13 @@ src/
 6. **Cron Jobs** — hold expiry ✅ (screening completion deferred, no current consumer; payment reconciliation deferred to phase 9, needs the Payments module)
 7. **Redis Pub/Sub bridge** — connect cron to gateway (Skipped)
 8. **Rate Limiting** — middleware + guard ✅
+9. **Payment** — Stripe checkout, webhook handler, refund logic ✅
 
-9. **Payment** — Stripe checkout, webhook handler, refund logic
+
 10. **Observability** — Prometheus metrics, Grafana dashboards
+
 11. **Load Testing** — Artillery scenarios, tune under Grafana observation
+
 12. **Security hardening** — HTTPS, input validation, JWT in cookies
 13. **Integration Wiring** — walk every `DEFERRED(phase-N)` marker across all
     modules and connect each seam to the module that now exists. Earlier phases
