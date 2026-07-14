@@ -80,7 +80,10 @@ let ScreeningsService = class ScreeningsService {
             data.startTime = start;
         if (dto.price !== undefined)
             data.price = dto.price;
-        return this.screeningsRepo.update(id, data);
+        const updated = await this.screeningsRepo.update(id, data);
+        await this.moviesCache.delLists();
+        await this.screeningsCache.delSeatMap(id);
+        return updated;
     }
     async cancelScreening(id) {
         const existing = await this.getExisting(id);
@@ -141,6 +144,26 @@ let ScreeningsService = class ScreeningsService {
         }));
         await this.screeningsCache.setSeatMap(screeningId, seatMap);
         return seatMap;
+    }
+    async getScreeningSummary(screeningId) {
+        const seatMap = await this.getSeatMap(screeningId);
+        let held = 0;
+        let booked = 0;
+        for (const seat of seatMap) {
+            if (seat.status === client_1.SeatStatus.HELD)
+                held++;
+            else if (seat.status === client_1.SeatStatus.BOOKED)
+                booked++;
+        }
+        const capacity = seatMap.length;
+        return {
+            screeningId,
+            capacity,
+            held,
+            booked,
+            available: capacity - held - booked,
+            reserved: held + booked,
+        };
     }
     toSeatStatus(reservationStatus) {
         if (reservationStatus === client_1.ReservationStatus.HELD)

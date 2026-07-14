@@ -35,5 +35,6 @@ export declare class TokenService {
     };
     setAuthCookies(res: Response, access: string, refresh: string): void;
     clearAuthCookies(res: Response): void;
+    revokeAllSessions(userId: number): Promise<void>;
 }
 export type { AccessPayload, RefreshPayload };

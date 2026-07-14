@@ -98,6 +98,13 @@ let TokenService = class TokenService {
         res.clearCookie('access_token');
         res.clearCookie('refresh_token', { path: REFRESH_COOKIE_PATH });
     }
+    async revokeAllSessions(userId) {
+        const client = this.redis.getClient();
+        const keys = await client.keys(`refresh:${userId}:*`);
+        if (keys.length > 0) {
+            await client.del(...keys);
+        }
+    }
 };
 exports.TokenService = TokenService;
 exports.TokenService = TokenService = __decorate([

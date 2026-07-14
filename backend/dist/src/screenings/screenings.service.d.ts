@@ -12,6 +12,14 @@ export interface SeatMapEntry {
     number: string;
     status: SeatStatus;
 }
+export interface ScreeningSummary {
+    screeningId: number;
+    capacity: number;
+    held: number;
+    booked: number;
+    available: number;
+    reserved: number;
+}
 export declare class ScreeningsService {
     private readonly screeningsRepo;
     private readonly moviesRepo;
@@ -35,6 +43,7 @@ export declare class ScreeningsService {
         price: number;
     }[]>;
     getSeatMap(screeningId: number): Promise<SeatMapEntry[]>;
+    getScreeningSummary(screeningId: number): Promise<ScreeningSummary>;
     private toSeatStatus;
     private assertNoOverlap;
     private computeEnd;

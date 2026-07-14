@@ -35,7 +35,13 @@ exports.ScreeningsModule = ScreeningsModule = __decorate([
             screenings_repository_1.ScreeningsRepository,
             screenings_cache_1.ScreeningsCache,
         ],
-        exports: [halls_service_1.HallsService, halls_repository_1.HallsRepository, screenings_service_1.ScreeningsService, screenings_repository_1.ScreeningsRepository],
+        exports: [
+            halls_service_1.HallsService,
+            halls_repository_1.HallsRepository,
+            screenings_service_1.ScreeningsService,
+            screenings_repository_1.ScreeningsRepository,
+            screenings_cache_1.ScreeningsCache,
+        ],
     })
 ], ScreeningsModule);
 //# sourceMappingURL=screenings.module.js.map

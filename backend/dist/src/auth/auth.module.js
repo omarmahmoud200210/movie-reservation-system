@@ -39,6 +39,7 @@ exports.AuthModule = AuthModule = __decorate([
             google_strategy_1.GoogleStrategy,
             google_link_strategy_1.GoogleLinkStrategy,
         ],
+        exports: [auth_service_1.AuthService, otp_service_1.OtpService, token_service_1.TokenService],
     })
 ], AuthModule);
 //# sourceMappingURL=auth.module.js.map
