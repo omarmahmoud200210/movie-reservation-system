@@ -2,6 +2,9 @@ node_modules/
 
 .env
 
+backend/test/.env.test.runtime
+backend/.env.test.stripe-live
+
 dist/
 
 .worktrees/

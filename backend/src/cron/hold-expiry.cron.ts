@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { ReservationsService } from '../reservations/reservations.service';
+import { PaymentsService } from '../payments/payments.service';
 
 /**
  * Releases HELD reservations whose 10-minute hold has expired, every minute.
@@ -14,7 +15,10 @@ import { ReservationsService } from '../reservations/reservations.service';
 export class HoldExpiryCron {
   private readonly logger = new Logger(HoldExpiryCron.name);
 
-  constructor(private readonly reservationsService: ReservationsService) {}
+  constructor(
+    private readonly reservationsService: ReservationsService,
+    private readonly paymentsService: PaymentsService,
+  ) {}
 
   @Cron(CronExpression.EVERY_MINUTE)
   async handleExpireHolds(): Promise<void> {
@@ -25,6 +29,12 @@ export class HoldExpiryCron {
     }
   }
 
-  // DEFERRED(phase-9): a payment-reconciliation cron job goes here once the
-  // Payments module exists (finds timed_out payments, reconciles with Stripe).
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async handleReconcilePayments(): Promise<void> {
+    try {
+      await this.paymentsService.reconcileTimedOutPayments();
+    } catch (err) {
+      this.logger.error('reconcileTimedOutPayments tick failed', err as Error);
+    }
+  }
 }

@@ -17,6 +17,8 @@ export default class RedisPubSub implements OnModuleDestroy, OnModuleInit {
     this.redis = new Redis({
       host: process.env.REDIS_PUBSUB_HOST ?? 'localhost',
       port: Number(process.env.REDIS_PUBSUB_PORT ?? 6380),
+      password: process.env.REDIS_PUBSUB_PASSWORD,
+      tls: process.env.REDIS_PUBSUB_TLS === 'true' ? {} : undefined,
     });
 
     this.redis.on('connect', () => this.logger.log('Redis Pub/Sub connected'));

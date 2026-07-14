@@ -13,7 +13,9 @@ const mockService = {
 };
 
 const mockRateLimiterService = {
-  rateLimiter: jest.fn().mockResolvedValue({ allowed: true, remaining: 2, resetAfterMs: 60000 }),
+  rateLimiter: jest
+    .fn()
+    .mockResolvedValue({ allowed: true, remaining: 2, resetAfterMs: 60000 }),
 };
 
 const GUARDS_METADATA = '__guards__';
@@ -38,8 +40,8 @@ describe('ReservationsController', () => {
 
   describe('delegation', () => {
     it('reserve -> service.reserve with the caller id and dto', async () => {
-      const dto = { screeningId: 3, seatIds: [11, 12] };
-      mockService.reserve.mockResolvedValue([{ id: 100 }]);
+      const dto = { screeningId: 3, seatId: 11 };
+      mockService.reserve.mockResolvedValue({ id: 100 });
 
       await controller.reserve(user as never, dto);
 
@@ -87,7 +89,11 @@ describe('ReservationsController', () => {
         RATE_LIMIT_KEY,
         ReservationsController.prototype.reserve,
       );
-      expect(meta).toEqual({ points: 3, duration: 60_000, key: 'reservations:create' });
+      expect(meta).toEqual({
+        points: 3,
+        duration: 60_000,
+        key: 'reservations:create',
+      });
     });
   });
 });

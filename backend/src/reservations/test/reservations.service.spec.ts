@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -9,13 +10,18 @@ import { ReservationStatus, ScreenStatus } from '@prisma/client';
 import { ReservationsService } from '../reservations.service';
 import { ReservationsRepository } from '../reservations.repository';
 import { ScreeningsRepository } from '../../screenings/screenings.repository';
+import PaymentAbuseService from '../../redis/payment-abuse.service';
+import { PaymentsService } from '../../payments/payments.service';
 import {
   RESERVATION_CANCELLED,
+  RESERVATION_CONFIRMED,
   RESERVATION_CREATED,
 } from '../events/reservation.events';
 
 const mockReservationsRepo = {
-  holdSeats: jest.fn(),
+  holdSeat: jest.fn(),
+  extendHold: jest.fn(),
+  confirm: jest.fn(),
   findById: jest.fn(),
   setStatus: jest.fn(),
   findByUser: jest.fn(),
@@ -23,6 +29,11 @@ const mockReservationsRepo = {
 };
 const mockScreeningsRepo = { findById: jest.fn() };
 const mockEvents = { emit: jest.fn() };
+const mockPaymentAbuse = {
+  isLockedOut: jest.fn().mockResolvedValue(false),
+  recordFailure: jest.fn(),
+};
+const mockPaymentsService = { refundReservation: jest.fn() };
 
 const NOW = new Date('2026-07-02T12:00:00.000Z');
 const HELD_UNTIL = new Date('2026-07-02T12:10:00.000Z'); // NOW + 10min
@@ -49,6 +60,8 @@ describe('ReservationsService', () => {
         { provide: ReservationsRepository, useValue: mockReservationsRepo },
         { provide: ScreeningsRepository, useValue: mockScreeningsRepo },
         { provide: EventEmitter2, useValue: mockEvents },
+        { provide: PaymentAbuseService, useValue: mockPaymentAbuse },
+        { provide: PaymentsService, useValue: mockPaymentsService },
       ],
     }).compile();
 
@@ -58,47 +71,33 @@ describe('ReservationsService', () => {
   afterEach(() => jest.useRealTimers());
 
   describe('reserve', () => {
-    const dto = { screeningId: 3, seatIds: [11, 12] };
+    const dto = { screeningId: 3, seatId: 11 };
 
-    it('holds the seats and returns the created reservations', async () => {
-      const created = [{ id: 100 }, { id: 101 }];
+    it('holds the seat and returns the created reservation', async () => {
+      const created = { id: 100, seatId: 11 };
       mockScreeningsRepo.findById.mockResolvedValue(screening);
-      mockReservationsRepo.holdSeats.mockResolvedValue(created);
+      mockReservationsRepo.holdSeat.mockResolvedValue(created);
 
       await expect(service.reserve(7, dto)).resolves.toBe(created);
 
-      expect(mockReservationsRepo.holdSeats).toHaveBeenCalledWith({
+      expect(mockReservationsRepo.holdSeat).toHaveBeenCalledWith({
         userId: 7,
         screeningId: 3,
         hallId: 2,
-        seatIds: [11, 12],
+        seatId: 11,
         heldUntil: HELD_UNTIL,
       });
     });
 
-    it('dedups seat ids before holding', async () => {
+    it('emits reservation.created with the screening id and seat id', async () => {
       mockScreeningsRepo.findById.mockResolvedValue(screening);
-      mockReservationsRepo.holdSeats.mockResolvedValue([]);
-
-      await service.reserve(7, { screeningId: 3, seatIds: [11, 11, 12] });
-
-      expect(mockReservationsRepo.holdSeats).toHaveBeenCalledWith(
-        expect.objectContaining({ seatIds: [11, 12] }),
-      );
-    });
-
-    it('emits reservation.created with the screening id and held seat ids', async () => {
-      mockScreeningsRepo.findById.mockResolvedValue(screening);
-      mockReservationsRepo.holdSeats.mockResolvedValue([
-        { id: 100, seatId: 11 },
-        { id: 101, seatId: 12 },
-      ]);
+      mockReservationsRepo.holdSeat.mockResolvedValue({ id: 100, seatId: 11 });
 
       await service.reserve(7, dto);
 
       expect(mockEvents.emit).toHaveBeenCalledWith(RESERVATION_CREATED, {
         screeningId: 3,
-        seatIds: [11, 12],
+        seatIds: [11],
       });
     });
 
@@ -108,7 +107,7 @@ describe('ReservationsService', () => {
       await expect(service.reserve(7, dto)).rejects.toBeInstanceOf(
         NotFoundException,
       );
-      expect(mockReservationsRepo.holdSeats).not.toHaveBeenCalled();
+      expect(mockReservationsRepo.holdSeat).not.toHaveBeenCalled();
     });
 
     it('throws 404 when the screening is not SCHEDULED', async () => {
@@ -120,7 +119,7 @@ describe('ReservationsService', () => {
       await expect(service.reserve(7, dto)).rejects.toBeInstanceOf(
         NotFoundException,
       );
-      expect(mockReservationsRepo.holdSeats).not.toHaveBeenCalled();
+      expect(mockReservationsRepo.holdSeat).not.toHaveBeenCalled();
     });
 
     it('throws 400 when the screening has already started', async () => {
@@ -132,17 +131,105 @@ describe('ReservationsService', () => {
       await expect(service.reserve(7, dto)).rejects.toBeInstanceOf(
         BadRequestException,
       );
-      expect(mockReservationsRepo.holdSeats).not.toHaveBeenCalled();
+      expect(mockReservationsRepo.holdSeat).not.toHaveBeenCalled();
     });
 
     it('does not emit when the hold fails', async () => {
       mockScreeningsRepo.findById.mockResolvedValue(screening);
-      mockReservationsRepo.holdSeats.mockRejectedValue(new ConflictException());
+      mockReservationsRepo.holdSeat.mockRejectedValue(new ConflictException());
 
       await expect(service.reserve(7, dto)).rejects.toBeInstanceOf(
         ConflictException,
       );
       expect(mockEvents.emit).not.toHaveBeenCalled();
+    });
+
+    it('throws 403 when the user is payment-locked-out, before any hold logic runs', async () => {
+      mockPaymentAbuse.isLockedOut.mockResolvedValue(true);
+
+      await expect(service.reserve(7, dto)).rejects.toBeInstanceOf(
+        ForbiddenException,
+      );
+      expect(mockPaymentAbuse.isLockedOut).toHaveBeenCalledWith(7);
+      expect(mockScreeningsRepo.findById).not.toHaveBeenCalled();
+      expect(mockReservationsRepo.holdSeat).not.toHaveBeenCalled();
+    });
+
+    it('proceeds when the user is not locked out', async () => {
+      mockPaymentAbuse.isLockedOut.mockResolvedValue(false);
+      mockScreeningsRepo.findById.mockResolvedValue(screening);
+      mockReservationsRepo.holdSeat.mockResolvedValue({ id: 100, seatId: 11 });
+
+      await expect(service.reserve(7, dto)).resolves.toMatchObject({
+        id: 100,
+      });
+    });
+  });
+
+  describe('findOwned', () => {
+    it('returns the reservation when owned by the caller', async () => {
+      const reservation = { id: 100, userId: 7 };
+      mockReservationsRepo.findById.mockResolvedValue(reservation);
+
+      await expect(service.findOwned(7, 100)).resolves.toBe(reservation);
+    });
+
+    it('throws 404 when missing', async () => {
+      mockReservationsRepo.findById.mockResolvedValue(null);
+
+      await expect(service.findOwned(7, 100)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+
+    it('throws 404 when owned by someone else', async () => {
+      mockReservationsRepo.findById.mockResolvedValue({ id: 100, userId: 99 });
+
+      await expect(service.findOwned(7, 100)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe('getById', () => {
+    it('returns the reservation regardless of owner', async () => {
+      const reservation = { id: 100, userId: 7 };
+      mockReservationsRepo.findById.mockResolvedValue(reservation);
+
+      await expect(service.getById(100)).resolves.toBe(reservation);
+    });
+
+    it('throws 404 when missing', async () => {
+      mockReservationsRepo.findById.mockResolvedValue(null);
+
+      await expect(service.getById(100)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe('extendHold', () => {
+    it('delegates to the repository', async () => {
+      const until = new Date('2026-07-02T12:30:00.000Z');
+      const updated = { id: 100, heldUntil: until };
+      mockReservationsRepo.extendHold.mockResolvedValue(updated);
+
+      await expect(service.extendHold(100, until)).resolves.toBe(updated);
+      expect(mockReservationsRepo.extendHold).toHaveBeenCalledWith(100, until);
+    });
+  });
+
+  describe('confirmPayment', () => {
+    it('confirms the reservation and emits reservation.confirmed', async () => {
+      const confirmed = { id: 100, screeningId: 3, seatId: 11 };
+      mockReservationsRepo.confirm.mockResolvedValue(confirmed);
+
+      await expect(service.confirmPayment(100)).resolves.toBe(confirmed);
+
+      expect(mockEvents.emit).toHaveBeenCalledWith(RESERVATION_CONFIRMED, {
+        screeningId: 3,
+        seatIds: [11],
+      });
     });
   });
 
@@ -190,10 +277,22 @@ describe('ReservationsService', () => {
       expect(mockReservationsRepo.setStatus).not.toHaveBeenCalled();
     });
 
-    it('throws 409 when the reservation is not HELD', async () => {
+    it('delegates to PaymentsService.refundReservation for a CONFIRMED reservation', async () => {
+      const confirmedReservation = { ...held, status: ReservationStatus.CONFIRMED };
+      mockReservationsRepo.findById.mockResolvedValue(confirmedReservation);
+      const refunded = { ...confirmedReservation, status: ReservationStatus.CANCELLED };
+      mockPaymentsService.refundReservation.mockResolvedValue(refunded);
+
+      await expect(service.cancel(7, 100)).resolves.toBe(refunded);
+
+      expect(mockPaymentsService.refundReservation).toHaveBeenCalledWith(confirmedReservation);
+      expect(mockReservationsRepo.setStatus).not.toHaveBeenCalled();
+    });
+
+    it('throws 409 when the reservation is CANCELLED (neither HELD nor CONFIRMED)', async () => {
       mockReservationsRepo.findById.mockResolvedValue({
         ...held,
-        status: ReservationStatus.CONFIRMED,
+        status: ReservationStatus.CANCELLED,
       });
 
       await expect(service.cancel(7, 100)).rejects.toBeInstanceOf(

@@ -3,11 +3,14 @@ import {
   ConnectedSocket,
   MessageBody,
   OnGatewayConnection,
+  OnGatewayDisconnect,
   SubscribeMessage,
   WebSocketGateway,
   WebSocketServer,
 } from '@nestjs/websockets';
 import type { Server, Socket } from 'socket.io';
+import { InjectMetric } from '@willsoto/nestjs-prometheus';
+import type { Counter, Gauge } from 'prom-client';
 // Note: @ConnectedSocket()/@MessageBody() only resolve inside @SubscribeMessage
 // handlers (Nest's RPC argument pipeline). handleConnection is invoked directly
 // by the OnGatewayConnection lifecycle hook, so its parameter is undecorated.
@@ -30,11 +33,19 @@ const roomName = (screeningId: number) => `screening:${screeningId}`;
  * state, it never accepts one.
  */
 @WebSocketGateway({ cors: { origin: process.env.FRONTEND_URL } })
-export class ScreeningGateway implements OnGatewayConnection {
+export class ScreeningGateway
+  implements OnGatewayConnection, OnGatewayDisconnect
+{
   @WebSocketServer()
   server: Server;
 
-  constructor(private readonly screeningsService: ScreeningsService) {}
+  constructor(
+    private readonly screeningsService: ScreeningsService,
+    @InjectMetric('websocket_connections_current')
+    private readonly connectionsGauge: Gauge<string>,
+    @InjectMetric('websocket_room_joins_total')
+    private readonly joinsCounter: Counter<string>,
+  ) {}
 
   handleConnection(client: Socket): void {
     // DEFERRED(phase-7): attach holder identity here (verify the httpOnly
@@ -42,6 +53,12 @@ export class ScreeningGateway implements OnGatewayConnection {
     // notifications need to target a specific socket. Requires re-enabling
     // `credentials: true` in the gateway's CORS options above.
     void client;
+    this.connectionsGauge.inc();
+  }
+
+  handleDisconnect(client: Socket): void {
+    void client;
+    this.connectionsGauge.dec();
   }
 
   @SubscribeMessage('join:screening')
@@ -59,6 +76,7 @@ export class ScreeningGateway implements OnGatewayConnection {
       const summary =
         await this.screeningsService.getScreeningSummary(screeningId);
       client.join(roomName(screeningId));
+      this.joinsCounter.inc();
       return { ok: true, seats, summary };
     } catch (err) {
       if (err instanceof NotFoundException) {

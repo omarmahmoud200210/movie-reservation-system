@@ -1,16 +1,22 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
+  forwardRef,
 } from '@nestjs/common';
 import { Reservation, ReservationStatus, ScreenStatus } from '@prisma/client';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ReservationsRepository } from './reservations.repository';
 import { ScreeningsRepository } from '../screenings/screenings.repository';
+import PaymentAbuseService from '../redis/payment-abuse.service';
+import { PaymentsService } from '../payments/payments.service';
 import { CreateReservationDto } from './dto/create-reservation.dto';
 import {
   RESERVATION_CANCELLED,
+  RESERVATION_CONFIRMED,
   RESERVATION_CREATED,
 } from './events/reservation.events';
 
@@ -22,17 +28,24 @@ export class ReservationsService {
     private readonly reservationsRepo: ReservationsRepository,
     private readonly screeningsRepo: ScreeningsRepository,
     private readonly events: EventEmitter2,
+    private readonly paymentAbuse: PaymentAbuseService,
+    @Inject(forwardRef(() => PaymentsService))
+    private readonly paymentsService: PaymentsService,
   ) {}
 
   /**
-   * Hold one or more seats for a screening, all-or-nothing. Creates HELD
-   * reservations; confirmation happens later on payment.
+   * Hold one seat for a screening. Creates a HELD reservation; confirmation
+   * happens later on payment.
    */
   async reserve(
     userId: number,
     dto: CreateReservationDto,
-  ): Promise<Reservation[]> {
-    const seatIds = [...new Set(dto.seatIds)];
+  ): Promise<Reservation> {
+    if (await this.paymentAbuse.isLockedOut(userId)) {
+      throw new ForbiddenException(
+        'Too many failed payments — try again later',
+      );
+    }
 
     const screening = await this.screeningsRepo.findById(dto.screeningId);
     if (!screening || screening.status !== ScreenStatus.SCHEDULED) {
@@ -42,31 +55,27 @@ export class ReservationsService {
       throw new BadRequestException('Screening has already started');
     }
 
-    // The cron `expireHolds` job (src/cron/hold-expiry.cron.ts) releases
-    // holds whose heldUntil has passed and are still HELD.
     const heldUntil = new Date(Date.now() + HOLD_MINUTES * 60_000);
 
-    const reservations = await this.reservationsRepo.holdSeats({
+    const reservation = await this.reservationsRepo.holdSeat({
       userId,
       screeningId: dto.screeningId,
       hallId: screening.hallId,
-      seatIds,
+      seatId: dto.seatId,
       heldUntil,
     });
 
     this.events.emit(RESERVATION_CREATED, {
       screeningId: dto.screeningId,
-      seatIds: reservations.map((r) => r.seatId),
+      seatIds: [reservation.seatId],
     });
-    return reservations;
+    return reservation;
   }
 
   /**
    * Release every HELD reservation whose 10-minute hold has expired. Groups
    * the released rows by screening and emits the existing
-   * `reservation.cancelled` event per group — reusing the same event the
-   * cache-invalidation and WebSocket-broadcast listeners already handle, so
-   * an expired hold shows up live with no new listener code.
+   * `reservation.cancelled` event per group.
    */
   async expireHolds(): Promise<void> {
     const released = await this.reservationsRepo.releaseExpiredHolds(
@@ -87,19 +96,21 @@ export class ReservationsService {
   }
 
   async cancel(userId: number, id: number): Promise<Reservation> {
-    const reservation = await this.reservationsRepo.findById(id);
-    // 404 (not 403) when it belongs to someone else, to avoid leaking existence.
-    if (!reservation || reservation.userId !== userId) {
-      throw new NotFoundException(`Reservation ${id} not found`);
-    }
-    // DEFERRED(phase-9): cancelling a CONFIRMED booking must issue a refund via
-    // the payment service; until then only HELD holds are cancellable here.
-    if (reservation.status !== ReservationStatus.HELD) {
-      throw new ConflictException('Only a held reservation can be cancelled');
-    }
+    const reservation = await this.findOwned(userId, id);
 
+    if (reservation.status === ReservationStatus.CONFIRMED) {
+      return this.paymentsService.refundReservation(reservation);
+    }
+    if (reservation.status !== ReservationStatus.HELD) {
+      throw new ConflictException('Only a held or confirmed reservation can be cancelled');
+    }
+    return this.finalizeCancel(reservation);
+  }
+
+  /** Sets CANCELLED and emits the shared cache/broadcast event. Also called by PaymentsService's refund flow. */
+  async finalizeCancel(reservation: Reservation): Promise<Reservation> {
     const cancelled = await this.reservationsRepo.setStatus(
-      id,
+      reservation.id,
       ReservationStatus.CANCELLED,
     );
     this.events.emit(RESERVATION_CANCELLED, {
@@ -107,6 +118,37 @@ export class ReservationsService {
       seatIds: [reservation.seatId],
     });
     return cancelled;
+  }
+
+  /** 404 (not 403) when it belongs to someone else, to avoid leaking existence. */
+  async findOwned(userId: number, id: number): Promise<Reservation> {
+    const reservation = await this.getById(id);
+    if (reservation.userId !== userId) {
+      throw new NotFoundException(`Reservation ${id} not found`);
+    }
+    return reservation;
+  }
+
+  /** No ownership check — for trusted system callers (webhook, cron). */
+  async getById(id: number): Promise<Reservation> {
+    const reservation = await this.reservationsRepo.findById(id);
+    if (!reservation) {
+      throw new NotFoundException(`Reservation ${id} not found`);
+    }
+    return reservation;
+  }
+
+  extendHold(id: number, until: Date): Promise<Reservation> {
+    return this.reservationsRepo.extendHold(id, until);
+  }
+
+  async confirmPayment(id: number): Promise<Reservation> {
+    const reservation = await this.reservationsRepo.confirm(id);
+    this.events.emit(RESERVATION_CONFIRMED, {
+      screeningId: reservation.screeningId,
+      seatIds: [reservation.seatId],
+    });
+    return reservation;
   }
 
   listMine(userId: number): Promise<Reservation[]> {

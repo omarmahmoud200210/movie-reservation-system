@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import type { Socket, Server } from 'socket.io';
+import { getToken } from '@willsoto/nestjs-prometheus';
 import { ScreeningGateway } from '../screening.gateway';
 import { ScreeningsService } from '../../screenings/screenings.service';
 
@@ -8,6 +9,9 @@ const mockScreeningsService = {
   getSeatMap: jest.fn(),
   getScreeningSummary: jest.fn(),
 };
+
+const mockConnectionsGauge = { inc: jest.fn(), dec: jest.fn() };
+const mockJoinsCounter = { inc: jest.fn() };
 
 function mockClient(): jest.Mocked<Pick<Socket, 'join'>> {
   return { join: jest.fn() };
@@ -23,6 +27,14 @@ describe('ScreeningGateway', () => {
       providers: [
         ScreeningGateway,
         { provide: ScreeningsService, useValue: mockScreeningsService },
+        {
+          provide: getToken('websocket_connections_current'),
+          useValue: mockConnectionsGauge,
+        },
+        {
+          provide: getToken('websocket_room_joins_total'),
+          useValue: mockJoinsCounter,
+        },
       ],
     }).compile();
 
@@ -33,6 +45,20 @@ describe('ScreeningGateway', () => {
     it('accepts every connection (no auth this phase)', () => {
       const client = mockClient() as unknown as Socket;
       expect(() => gateway.handleConnection(client)).not.toThrow();
+    });
+
+    it('increments the connections gauge', () => {
+      const client = mockClient() as unknown as Socket;
+      gateway.handleConnection(client);
+      expect(mockConnectionsGauge.inc).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('handleDisconnect', () => {
+    it('decrements the connections gauge', () => {
+      const client = mockClient() as unknown as Socket;
+      gateway.handleDisconnect(client);
+      expect(mockConnectionsGauge.dec).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -58,6 +84,7 @@ describe('ScreeningGateway', () => {
 
       expect(client.join).toHaveBeenCalledWith('screening:10');
       expect(ack).toEqual({ ok: true, seats, summary });
+      expect(mockJoinsCounter.inc).toHaveBeenCalledTimes(1);
     });
 
     it('acks ok:false and does not join when the screening is unknown/cancelled', async () => {
