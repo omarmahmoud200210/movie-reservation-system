@@ -6,6 +6,7 @@ import { PrismaClient } from '@prisma/client';
 import { createTestApp } from './support/app';
 import { resetState, closeRedis } from './support/db';
 import { createAuthedUser } from './support/auth';
+import { createTestPrismaClient } from './support/prisma';
 
 describe('Auth (e2e)', () => {
   let app: INestApplication;
@@ -13,7 +14,7 @@ describe('Auth (e2e)', () => {
 
   beforeAll(async () => {
     app = await createTestApp();
-    prisma = new PrismaClient();
+    prisma = createTestPrismaClient();
   });
 
   afterAll(async () => {

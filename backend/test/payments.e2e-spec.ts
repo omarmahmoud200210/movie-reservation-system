@@ -8,6 +8,7 @@ import { createAuthedUser } from './support/auth';
 import { createHallWithSeats, createPublishedMovie, createScreening } from './support/fixtures';
 import { connectSocket, joinScreening, waitForEvent } from './support/socket';
 import { signWebhookPayload } from './support/stripe-webhook';
+import { createTestPrismaClient } from './support/prisma';
 import { PaymentsService } from '../src/payments/payments.service';
 import Stripe from 'stripe';
 
@@ -21,7 +22,7 @@ describe('Payments (e2e)', () => {
 
   beforeAll(async () => {
     app = await createTestApp();
-    prisma = new PrismaClient();
+    prisma = createTestPrismaClient();
     const paymentsService = app.get(PaymentsService);
     stripeMock = (paymentsService as unknown as { stripe: typeof stripeMock }).stripe;
   });

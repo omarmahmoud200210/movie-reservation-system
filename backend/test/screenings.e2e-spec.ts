@@ -5,6 +5,7 @@ import { createTestApp } from './support/app';
 import { resetState, closeRedis } from './support/db';
 import { createAuthedUser } from './support/auth';
 import { createHallWithSeats, createPublishedMovie, createScreening } from './support/fixtures';
+import { createTestPrismaClient } from './support/prisma';
 
 describe('Screenings (e2e)', () => {
   let app: INestApplication;
@@ -12,7 +13,7 @@ describe('Screenings (e2e)', () => {
 
   beforeAll(async () => {
     app = await createTestApp();
-    prisma = new PrismaClient();
+    prisma = createTestPrismaClient();
   });
 
   afterAll(async () => {

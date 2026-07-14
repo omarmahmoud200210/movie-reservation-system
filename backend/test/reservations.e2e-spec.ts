@@ -7,6 +7,7 @@ import { resetState, closeRedis } from './support/db';
 import { createAuthedUser } from './support/auth';
 import { createHallWithSeats, createPublishedMovie, createScreening } from './support/fixtures';
 import { connectSocket, joinScreening, waitForEvent } from './support/socket';
+import { createTestPrismaClient } from './support/prisma';
 import { HoldExpiryCron } from '../src/cron/hold-expiry.cron';
 
 describe('Reservations (e2e)', () => {
@@ -15,7 +16,7 @@ describe('Reservations (e2e)', () => {
 
   beforeAll(async () => {
     app = await createTestApp();
-    prisma = new PrismaClient();
+    prisma = createTestPrismaClient();
   });
 
   afterAll(async () => {

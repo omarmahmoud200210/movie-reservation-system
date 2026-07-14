@@ -3,15 +3,15 @@ import request from 'supertest';
 import { PrismaClient } from '@prisma/client';
 import { createTestApp } from './support/app';
 import { resetState, closeRedis } from './support/db';
+import { createTestPrismaClient } from './support/prisma';
 
 describe('e2e harness sanity check', () => {
   let app: INestApplication;
   let prisma: PrismaClient;
 
   beforeAll(async () => {
-    expect(process.env.DATABASE_URL).toContain('movie_reservation_test');
     app = await createTestApp();
-    prisma = new PrismaClient();
+    prisma = createTestPrismaClient();
   });
 
   afterAll(async () => {
