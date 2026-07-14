@@ -3,9 +3,12 @@ import { OnEvent } from '@nestjs/event-emitter';
 import { SeatStatus } from '@prisma/client';
 import { ScreeningGateway } from './screening.gateway';
 import { ScreeningsService } from '../screenings/screenings.service';
+import { InjectMetric } from '@willsoto/nestjs-prometheus';
+import type { Counter } from 'prom-client';
 import {
   RESERVATION_CANCELLED,
   RESERVATION_CREATED,
+  RESERVATION_CONFIRMED,
   type ReservationChangedPayload,
 } from '../reservations/events/reservation.events';
 
@@ -23,6 +26,8 @@ export class ReservationBroadcastListener {
   constructor(
     private readonly gateway: ScreeningGateway,
     private readonly screeningsService: ScreeningsService,
+    @InjectMetric('websocket_broadcasts_total')
+    private readonly broadcastsCounter: Counter<string>,
   ) {}
 
   @OnEvent(RESERVATION_CREATED)
@@ -35,16 +40,18 @@ export class ReservationBroadcastListener {
     await this.broadcast(payload, 'seat:cancelled', SeatStatus.AVAILABLE);
   }
 
-  // DEFERRED(phase-9): once payment confirmation exists, a HELD -> CONFIRMED
-  // transition needs its own broadcast branch here mapping to a `seat:booked`
-  // event with SeatStatus.BOOKED — this listener currently only distinguishes
-  // HELD (created) vs AVAILABLE (cancelled).
+  @OnEvent(RESERVATION_CONFIRMED)
+  async handleConfirmed(payload: ReservationChangedPayload): Promise<void> {
+    await this.broadcast(payload, 'seat:booked', SeatStatus.BOOKED);
+  }
 
   private async broadcast(
     payload: ReservationChangedPayload,
     event: string,
     status: SeatStatus,
   ): Promise<void> {
+    this.broadcastsCounter.inc({ event });
+
     try {
       this.gateway.emitToRoom(payload.screeningId, event, {
         screeningId: payload.screeningId,
