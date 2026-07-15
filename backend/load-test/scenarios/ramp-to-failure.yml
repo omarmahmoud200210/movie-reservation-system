@@ -1,0 +1,44 @@
+# backend/load-test/scenarios/ramp-to-failure.yml
+config:
+  target: "http://localhost:3000"
+  processor: "../processor.js"
+  phases:
+    - duration: 30
+      arrivalRate: 10
+      name: "10 req/s"
+    - duration: 30
+      arrivalRate: 20
+      name: "20 req/s"
+    - duration: 30
+      arrivalRate: 50
+      name: "50 req/s"
+    - duration: 30
+      arrivalRate: 100
+      name: "100 req/s"
+    - duration: 30
+      arrivalRate: 200
+      name: "200 req/s"
+  ensure:
+    p95: 500
+
+scenarios:
+  - name: "Browse and maybe book (ramping)"
+    beforeScenario: "loginBeforeScenario"
+    flow:
+      - get:
+          url: "/api/v1/movies"
+          headers:
+            Cookie: "{{ authCookie }}"
+      - get:
+          url: "/api/v1/screenings/{{ screeningId }}/seats"
+          headers:
+            Cookie: "{{ authCookie }}"
+          afterResponse: "pickAvailableSeat"
+      - post:
+          url: "/api/v1/reservations"
+          ifTrue: "willBook"
+          headers:
+            Cookie: "{{ authCookie }}"
+          json:
+            screeningId: "{{ screeningId }}"
+            seatIds: ["{{ pickedSeatId }}"]

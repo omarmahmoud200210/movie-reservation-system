@@ -1,0 +1,24 @@
+# backend/load-test/scenarios/hot-seat-contention.yml
+config:
+  target: "http://localhost:3000"
+  processor: "../processor.js"
+  plugins:
+    expect: {}
+  phases:
+    - duration: 1
+      arrivalCount: 100
+      name: "Hot seat contention"
+
+scenarios:
+  - name: "Race for the same seat"
+    beforeScenario: "loginBeforeScenario"
+    flow:
+      - post:
+          url: "/api/v1/reservations"
+          headers:
+            Cookie: "{{ authCookie }}"
+          json:
+            screeningId: "{{ screeningId }}"
+            seatIds: ["{{ hotSeatId }}"]
+          expect:
+            - statusCode: [201, 409]

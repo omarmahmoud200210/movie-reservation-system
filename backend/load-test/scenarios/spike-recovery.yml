@@ -1,0 +1,36 @@
+# backend/load-test/scenarios/spike-recovery.yml
+config:
+  target: "http://localhost:3000"
+  processor: "../processor.js"
+  phases:
+    - duration: 30
+      arrivalRate: 10
+      name: "baseline before spike"
+    - duration: 20
+      arrivalRate: 300
+      name: "spike"
+    - duration: 60
+      arrivalRate: 10
+      name: "recovery baseline"
+
+scenarios:
+  - name: "Browse and maybe book (spike)"
+    beforeScenario: "loginBeforeScenario"
+    flow:
+      - get:
+          url: "/api/v1/movies"
+          headers:
+            Cookie: "{{ authCookie }}"
+      - get:
+          url: "/api/v1/screenings/{{ screeningId }}/seats"
+          headers:
+            Cookie: "{{ authCookie }}"
+          afterResponse: "pickAvailableSeat"
+      - post:
+          url: "/api/v1/reservations"
+          ifTrue: "willBook"
+          headers:
+            Cookie: "{{ authCookie }}"
+          json:
+            screeningId: "{{ screeningId }}"
+            seatIds: ["{{ pickedSeatId }}"]

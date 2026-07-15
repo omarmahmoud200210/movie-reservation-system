@@ -1,0 +1,33 @@
+# backend/load-test/scenarios/mixed-read-write.yml
+config:
+  target: "http://localhost:3000"
+  processor: "../processor.js"
+  phases:
+    - duration: 60
+      arrivalRate: 50
+      name: "Mixed read/write baseline"
+  ensure:
+    p95: 500
+    maxErrorRate: 1
+
+scenarios:
+  - name: "Browse and maybe book"
+    beforeScenario: "loginBeforeScenario"
+    flow:
+      - get:
+          url: "/api/v1/movies"
+          headers:
+            Cookie: "{{ authCookie }}"
+      - get:
+          url: "/api/v1/screenings/{{ screeningId }}/seats"
+          headers:
+            Cookie: "{{ authCookie }}"
+          afterResponse: "pickAvailableSeat"
+      - post:
+          url: "/api/v1/reservations"
+          ifTrue: "willBook"
+          headers:
+            Cookie: "{{ authCookie }}"
+          json:
+            screeningId: "{{ screeningId }}"
+            seatIds: ["{{ pickedSeatId }}"]

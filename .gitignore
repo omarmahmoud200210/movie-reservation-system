@@ -8,3 +8,6 @@ backend/.env.test.stripe-live
 dist/
 
 .worktrees/
+
+backend/load-test/seed-output.json
+backend/load-test/multi-contention-results.ndjson

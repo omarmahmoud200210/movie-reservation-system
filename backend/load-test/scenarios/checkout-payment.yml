@@ -1,0 +1,38 @@
+# backend/load-test/scenarios/checkout-payment.yml
+config:
+  target: "http://localhost:3000"
+  processor: "../processor.js"
+  plugins:
+    expect: {}
+  phases:
+    - duration: 60
+      arrivalRate: 5
+      name: "Checkout session creation"
+  ensure:
+    maxErrorRate: 1
+
+scenarios:
+  - name: "Reserve then start checkout"
+    beforeScenario: "loginBeforeScenario"
+    flow:
+      - get:
+          url: "/api/v1/screenings/{{ screeningId }}/seats"
+          headers:
+            Cookie: "{{ authCookie }}"
+          afterResponse: "pickAvailableSeat"
+      - post:
+          url: "/api/v1/reservations"
+          headers:
+            Cookie: "{{ authCookie }}"
+          json:
+            screeningId: "{{ screeningId }}"
+            seatIds: ["{{ pickedSeatId }}"]
+          afterResponse: "captureReservationId"
+      - post:
+          url: "/api/v1/payments/checkout-session"
+          headers:
+            Cookie: "{{ authCookie }}"
+          json:
+            reservationId: "{{ reservationId }}"
+          expect:
+            - statusCode: [200, 201]

@@ -1,0 +1,32 @@
+# backend/load-test/scenarios/soak-mixed.yml
+config:
+  target: "http://localhost:3000"
+  processor: "../processor.js"
+  phases:
+    - duration: 900
+      arrivalRate: 40
+      name: "Sustained mixed load (15 min)"
+  ensure:
+    maxErrorRate: 1
+
+scenarios:
+  - name: "Browse and maybe book (sustained)"
+    beforeScenario: "loginBeforeScenario"
+    flow:
+      - get:
+          url: "/api/v1/movies"
+          headers:
+            Cookie: "{{ authCookie }}"
+      - get:
+          url: "/api/v1/screenings/{{ screeningId }}/seats"
+          headers:
+            Cookie: "{{ authCookie }}"
+          afterResponse: "pickAvailableSeat"
+      - post:
+          url: "/api/v1/reservations"
+          ifTrue: "willBook"
+          headers:
+            Cookie: "{{ authCookie }}"
+          json:
+            screeningId: "{{ screeningId }}"
+            seatIds: ["{{ pickedSeatId }}"]
