@@ -4,19 +4,24 @@ import { MetricsInterceptor } from '../interceptors/metrics.interceptor';
 
 const mockCounter = { inc: jest.fn() };
 const mockHistogram = { observe: jest.fn() };
+const mockResponseSizeHistogram = { observe: jest.fn() };
 
 function mockHttpContext(overrides: {
   method?: string;
   routePath?: string;
   path?: string;
   statusCode?: number;
+  contentLength?: string;
 }): ExecutionContext {
   const request = {
     method: overrides.method ?? 'GET',
     route: overrides.routePath ? { path: overrides.routePath } : undefined,
     path: overrides.path ?? '/movies/1',
   };
-  const response = { statusCode: overrides.statusCode ?? 200 };
+  const response = {
+    statusCode: overrides.statusCode ?? 200,
+    getHeader: jest.fn(() => overrides.contentLength),
+  };
   return {
     getType: () => 'http',
     switchToHttp: () => ({
@@ -42,6 +47,7 @@ describe('MetricsInterceptor', () => {
     interceptor = new MetricsInterceptor(
       mockCounter as never,
       mockHistogram as never,
+      mockResponseSizeHistogram as never,
     );
   });
 
@@ -50,6 +56,7 @@ describe('MetricsInterceptor', () => {
       method: 'GET',
       routePath: '/movies/:id',
       statusCode: 200,
+      contentLength: '1234',
     });
 
     await lastValueFrom(interceptor.intercept(context, handlerReturning({})));
@@ -62,6 +69,25 @@ describe('MetricsInterceptor', () => {
     expect(mockHistogram.observe).toHaveBeenCalledWith(
       { method: 'GET', route: '/movies/:id', status_code: '200' },
       expect.any(Number),
+    );
+    expect(mockResponseSizeHistogram.observe).toHaveBeenCalledWith(
+      { method: 'GET', route: '/movies/:id', status_code: '200' },
+      1234,
+    );
+  });
+
+  it('records a response size of 0 when content-length is absent', async () => {
+    const context = mockHttpContext({
+      method: 'GET',
+      routePath: '/movies/:id',
+      statusCode: 200,
+    });
+
+    await lastValueFrom(interceptor.intercept(context, handlerReturning({})));
+
+    expect(mockResponseSizeHistogram.observe).toHaveBeenCalledWith(
+      { method: 'GET', route: '/movies/:id', status_code: '200' },
+      0,
     );
   });
 
