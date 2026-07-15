@@ -27,7 +27,7 @@
     "prisma:studio": "prisma studio",
     "prisma:seed": "ts-node prisma/seed.ts",
     "db:reset": "prisma migrate reset --force && prisma db seed",
-    "load-test:seed": "prisma migrate reset --force --skip-seed && ts-node -r dotenv/config load-test/seed.ts",
+    "load-test:seed": "prisma migrate reset --force && ts-node -r dotenv/config load-test/seed.ts",
     "load-test:mixed": "npm run load-test:seed && artillery run load-test/scenarios/mixed-read-write.yml",
     "load-test:contention": "npm run load-test:seed && artillery run load-test/scenarios/hot-seat-contention.yml",
     "load-test:ramp": "npm run load-test:seed && artillery run load-test/scenarios/ramp-to-failure.yml",

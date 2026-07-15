@@ -13,7 +13,9 @@ function loadSeedOutput() {
   return JSON.parse(fs.readFileSync(seedPath, 'utf8'));
 }
 
-async function loginBeforeScenario(context, ee, next) {
+// Artillery detects this is an `async function` and auto-callbackifies it — calling it as
+// (context, ee) only, with no `next`. Throw on failure instead of calling a nonexistent next().
+async function loginBeforeScenario(context, ee) {
   const seedOutput = loadSeedOutput();
   context.vars.screeningId = seedOutput.screeningId;
   context.vars.hotSeatId = seedOutput.hotSeatId;
@@ -29,13 +31,11 @@ async function loginBeforeScenario(context, ee, next) {
   });
 
   if (!res.ok) {
-    return next(new Error(`load-test login failed for ${email}: ${res.status}`));
+    throw new Error(`load-test login failed for ${email}: ${res.status}`);
   }
 
   const setCookies = res.headers.getSetCookie();
   context.vars.authCookie = setCookies.map((c) => c.split(';')[0]).join('; ');
-
-  return next();
 }
 
 function pickAvailableSeat(requestParams, response, context, ee, next) {

@@ -41,4 +41,4 @@ scenarios:
             Cookie: "{{ authCookie }}"
           json:
             screeningId: "{{ screeningId }}"
-            seatIds: ["{{ pickedSeatId }}"]
+            seatId: "{{ pickedSeatId }}"

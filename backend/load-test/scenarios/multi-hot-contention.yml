@@ -21,7 +21,7 @@ scenarios:
             Cookie: "{{ authCookie }}"
           json:
             screeningId: "{{ screeningId }}"
-            seatIds: ["{{ hotSeatId }}"]
+            seatId: "{{ hotSeatId }}"
           expect:
             - statusCode: [201, 409]
           afterResponse: "logContentionResult"
