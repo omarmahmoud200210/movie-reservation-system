@@ -16,6 +16,7 @@ import {
   RESERVATION_CANCELLED,
   RESERVATION_CONFIRMED,
   RESERVATION_CREATED,
+  RESERVATION_HOLD_EXPIRED,
 } from '../events/reservation.events';
 
 const mockReservationsRepo = {
@@ -278,14 +279,22 @@ describe('ReservationsService', () => {
     });
 
     it('delegates to PaymentsService.refundReservation for a CONFIRMED reservation', async () => {
-      const confirmedReservation = { ...held, status: ReservationStatus.CONFIRMED };
+      const confirmedReservation = {
+        ...held,
+        status: ReservationStatus.CONFIRMED,
+      };
       mockReservationsRepo.findById.mockResolvedValue(confirmedReservation);
-      const refunded = { ...confirmedReservation, status: ReservationStatus.CANCELLED };
+      const refunded = {
+        ...confirmedReservation,
+        status: ReservationStatus.CANCELLED,
+      };
       mockPaymentsService.refundReservation.mockResolvedValue(refunded);
 
       await expect(service.cancel(7, 100)).resolves.toBe(refunded);
 
-      expect(mockPaymentsService.refundReservation).toHaveBeenCalledWith(confirmedReservation);
+      expect(mockPaymentsService.refundReservation).toHaveBeenCalledWith(
+        confirmedReservation,
+      );
       expect(mockReservationsRepo.setStatus).not.toHaveBeenCalled();
     });
 
@@ -321,16 +330,16 @@ describe('ReservationsService', () => {
       expect(mockEvents.emit).not.toHaveBeenCalled();
     });
 
-    it('emits one reservation.cancelled per screening, grouping seat ids', async () => {
+    it('emits one reservation.cancelled per screening, grouping seat ids, and one reservation.hold_expired per released reservation', async () => {
       mockReservationsRepo.releaseExpiredHolds.mockResolvedValue([
-        { id: 100, screeningId: 3, seatId: 11 },
-        { id: 102, screeningId: 5, seatId: 20 },
-        { id: 101, screeningId: 3, seatId: 12 },
+        { id: 100, userId: 7, screeningId: 3, seatId: 11 },
+        { id: 102, userId: 9, screeningId: 5, seatId: 20 },
+        { id: 101, userId: 7, screeningId: 3, seatId: 12 },
       ]);
 
       await service.expireHolds();
 
-      expect(mockEvents.emit).toHaveBeenCalledTimes(2);
+      expect(mockEvents.emit).toHaveBeenCalledTimes(5);
       expect(mockEvents.emit).toHaveBeenCalledWith(RESERVATION_CANCELLED, {
         screeningId: 3,
         seatIds: [11, 12],
@@ -338,6 +347,21 @@ describe('ReservationsService', () => {
       expect(mockEvents.emit).toHaveBeenCalledWith(RESERVATION_CANCELLED, {
         screeningId: 5,
         seatIds: [20],
+      });
+      expect(mockEvents.emit).toHaveBeenCalledWith(RESERVATION_HOLD_EXPIRED, {
+        userId: 7,
+        screeningId: 3,
+        seatId: 11,
+      });
+      expect(mockEvents.emit).toHaveBeenCalledWith(RESERVATION_HOLD_EXPIRED, {
+        userId: 9,
+        screeningId: 5,
+        seatId: 20,
+      });
+      expect(mockEvents.emit).toHaveBeenCalledWith(RESERVATION_HOLD_EXPIRED, {
+        userId: 7,
+        screeningId: 3,
+        seatId: 12,
       });
     });
 

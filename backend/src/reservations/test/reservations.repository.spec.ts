@@ -198,8 +198,8 @@ describe('ReservationsRepository', () => {
   describe('releaseExpiredHolds', () => {
     it('runs the atomic RETURNING update and resolves with the released rows', async () => {
       const released = [
-        { id: 100, screeningId: 3, seatId: 11 },
-        { id: 101, screeningId: 3, seatId: 12 },
+        { id: 100, userId: 7, screeningId: 3, seatId: 11 },
+        { id: 101, userId: 9, screeningId: 3, seatId: 12 },
       ];
       mockPrisma.$queryRaw.mockResolvedValue(released);
       const now = new Date('2026-07-04T12:00:00.000Z');

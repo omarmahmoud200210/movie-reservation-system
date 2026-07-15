@@ -18,6 +18,7 @@ import {
   RESERVATION_CANCELLED,
   RESERVATION_CONFIRMED,
   RESERVATION_CREATED,
+  RESERVATION_HOLD_EXPIRED,
 } from './events/reservation.events';
 
 const HOLD_MINUTES = 10;
@@ -93,6 +94,14 @@ export class ReservationsService {
     for (const [screeningId, seatIds] of byScreening) {
       this.events.emit(RESERVATION_CANCELLED, { screeningId, seatIds });
     }
+
+    for (const r of released) {
+      this.events.emit(RESERVATION_HOLD_EXPIRED, {
+        userId: r.userId,
+        screeningId: r.screeningId,
+        seatId: r.seatId,
+      });
+    }
   }
 
   async cancel(userId: number, id: number): Promise<Reservation> {
@@ -102,7 +111,9 @@ export class ReservationsService {
       return this.paymentsService.refundReservation(reservation);
     }
     if (reservation.status !== ReservationStatus.HELD) {
-      throw new ConflictException('Only a held or confirmed reservation can be cancelled');
+      throw new ConflictException(
+        'Only a held or confirmed reservation can be cancelled',
+      );
     }
     return this.finalizeCancel(reservation);
   }

@@ -9,6 +9,8 @@ import {
   RESERVATION_CANCELLED,
   RESERVATION_CREATED,
   RESERVATION_CONFIRMED,
+  RESERVATION_HOLD_EXPIRED,
+  type HoldExpiredPayload,
   type ReservationChangedPayload,
 } from '../reservations/events/reservation.events';
 
@@ -45,6 +47,19 @@ export class ReservationBroadcastListener {
     await this.broadcast(payload, 'seat:booked', SeatStatus.BOOKED);
   }
 
+  @OnEvent(RESERVATION_HOLD_EXPIRED)
+  handleHoldExpired(payload: HoldExpiredPayload): void {
+    this.broadcastsCounter.inc({ event: 'hold:expired' });
+    try {
+      this.gateway.emitToUser(payload.userId, 'hold:expired', {
+        screeningId: payload.screeningId,
+        seatId: payload.seatId,
+      });
+    } catch (err) {
+      this.logger.warn(`hold:expired broadcast failed: ${String(err)}`);
+    }
+  }
+
   private async broadcast(
     payload: ReservationChangedPayload,
     event: string,
@@ -73,7 +88,11 @@ export class ReservationBroadcastListener {
       const summary = await this.screeningsService.getScreeningSummary(
         payload.screeningId,
       );
-      this.gateway.emitToRoom(payload.screeningId, 'screening:summary', summary);
+      this.gateway.emitToRoom(
+        payload.screeningId,
+        'screening:summary',
+        summary,
+      );
     } catch (err) {
       this.logger.warn(`screening:summary broadcast failed: ${String(err)}`);
     }

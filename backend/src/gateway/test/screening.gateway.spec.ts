@@ -1,4 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { JwtService } from '@nestjs/jwt';
 import { NotFoundException } from '@nestjs/common';
 import type { Socket, Server } from 'socket.io';
 import { getToken } from '@willsoto/nestjs-prometheus';
@@ -10,11 +11,20 @@ const mockScreeningsService = {
   getScreeningSummary: jest.fn(),
 };
 
+const mockJwtService = {
+  verify: jest.fn(),
+};
+
 const mockConnectionsGauge = { inc: jest.fn(), dec: jest.fn() };
 const mockJoinsCounter = { inc: jest.fn() };
 
-function mockClient(): jest.Mocked<Pick<Socket, 'join'>> {
-  return { join: jest.fn() };
+function mockClient(cookieHeader?: string) {
+  return {
+    join: jest.fn(),
+    emit: jest.fn(),
+    handshake: { headers: { cookie: cookieHeader } },
+    data: {} as { userId?: number },
+  };
 }
 
 describe('ScreeningGateway', () => {
@@ -27,6 +37,7 @@ describe('ScreeningGateway', () => {
       providers: [
         ScreeningGateway,
         { provide: ScreeningsService, useValue: mockScreeningsService },
+        { provide: JwtService, useValue: mockJwtService },
         {
           provide: getToken('websocket_connections_current'),
           useValue: mockConnectionsGauge,
@@ -42,7 +53,7 @@ describe('ScreeningGateway', () => {
   });
 
   describe('handleConnection', () => {
-    it('accepts every connection (no auth this phase)', () => {
+    it('accepts every connection (auth optional)', () => {
       const client = mockClient() as unknown as Socket;
       expect(() => gateway.handleConnection(client)).not.toThrow();
     });
@@ -52,6 +63,43 @@ describe('ScreeningGateway', () => {
       gateway.handleConnection(client);
       expect(mockConnectionsGauge.inc).toHaveBeenCalledTimes(1);
     });
+
+    it('does not throw and stays anonymous when there is no cookie', () => {
+      const client = mockClient() as unknown as Socket;
+      expect(() => gateway.handleConnection(client)).not.toThrow();
+      expect(mockJwtService.verify).not.toHaveBeenCalled();
+      expect(
+        (client as unknown as { data: { userId?: number } }).data.userId,
+      ).toBeUndefined();
+    });
+
+    it('does not throw and stays anonymous when the token is invalid/expired', () => {
+      mockJwtService.verify.mockImplementation(() => {
+        throw new Error('jwt expired');
+      });
+      const client = mockClient('access_token=bad-token') as unknown as Socket;
+
+      expect(() => gateway.handleConnection(client)).not.toThrow();
+      expect(
+        (client as unknown as { data: { userId?: number } }).data.userId,
+      ).toBeUndefined();
+    });
+
+    it('attaches the holder identity from a valid access_token cookie', () => {
+      mockJwtService.verify.mockReturnValue({ sub: 42 });
+      const client = mockClient(
+        'other=1; access_token=good-token; more=2',
+      ) as unknown as Socket;
+
+      gateway.handleConnection(client);
+
+      expect(mockJwtService.verify).toHaveBeenCalledWith('good-token', {
+        secret: process.env.JWT_ACCESS_SECRET,
+      });
+      expect(
+        (client as unknown as { data: { userId?: number } }).data.userId,
+      ).toBe(42);
+    });
   });
 
   describe('handleDisconnect', () => {
@@ -59,6 +107,53 @@ describe('ScreeningGateway', () => {
       const client = mockClient() as unknown as Socket;
       gateway.handleDisconnect(client);
       expect(mockConnectionsGauge.dec).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not throw for an anonymous (never-identified) client', () => {
+      const client = mockClient() as unknown as Socket;
+      expect(() => gateway.handleDisconnect(client)).not.toThrow();
+    });
+  });
+
+  describe('emitToUser', () => {
+    it('emits to every socket registered for that user, and none other', () => {
+      mockJwtService.verify.mockReturnValue({ sub: 42 });
+      const client1 = mockClient('access_token=t1') as unknown as Socket;
+      const client2 = mockClient('access_token=t2') as unknown as Socket;
+      gateway.handleConnection(client1);
+      gateway.handleConnection(client2);
+
+      const otherClient = mockClient() as unknown as Socket;
+      gateway.handleConnection(otherClient);
+
+      gateway.emitToUser(42, 'hold:expired', { screeningId: 1, seatId: 2 });
+
+      expect(client1.emit).toHaveBeenCalledWith('hold:expired', {
+        screeningId: 1,
+        seatId: 2,
+      });
+      expect(client2.emit).toHaveBeenCalledWith('hold:expired', {
+        screeningId: 1,
+        seatId: 2,
+      });
+      expect(otherClient.emit).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when no socket is registered for that user', () => {
+      expect(() => gateway.emitToUser(999, 'hold:expired', {})).not.toThrow();
+    });
+
+    it('stops emitting to a socket after it disconnects', () => {
+      mockJwtService.verify.mockReturnValue({ sub: 42 });
+      const client = mockClient('access_token=t1') as unknown as Socket;
+      gateway.handleConnection(client);
+      gateway.handleDisconnect(client);
+
+      gateway.emitToUser(42, 'hold:expired', {});
+
+      expect(
+        (client as unknown as { emit: jest.Mock }).emit,
+      ).not.toHaveBeenCalled();
     });
   });
 

@@ -16,6 +16,7 @@ export interface HoldSeatParams {
 
 export interface ExpiredHold {
   id: number;
+  userId: number;
   screeningId: number;
   seatId: number;
 }
@@ -116,7 +117,7 @@ export class ReservationsRepository {
       UPDATE "reservation"
       SET status = 'CANCELLED', "heldUntil" = NULL, "updatedAt" = ${now}
       WHERE status = 'HELD' AND "heldUntil" < ${now}
-      RETURNING id, "screeningId", "seatId"
+      RETURNING id, "userId", "screeningId", "seatId"
     `);
   }
 

@@ -1,4 +1,5 @@
 import { NotFoundException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import {
   ConnectedSocket,
   MessageBody,
@@ -14,6 +15,7 @@ import type { Counter, Gauge } from 'prom-client';
 // Note: @ConnectedSocket()/@MessageBody() only resolve inside @SubscribeMessage
 // handlers (Nest's RPC argument pipeline). handleConnection is invoked directly
 // by the OnGatewayConnection lifecycle hook, so its parameter is undecorated.
+import { type AccessPayload } from '../auth/token.service';
 import {
   ScreeningsService,
   type ScreeningSummary,
@@ -28,36 +30,67 @@ const roomName = (screeningId: number) => `screening:${screeningId}`;
 
 /**
  * Public, read-only real-time layer: broadcasts seat/summary changes to every
- * visitor watching a screening. No WS auth — the only mutating action
- * (reserve/cancel) is already guarded over HTTP; this gateway only pushes
- * state, it never accepts one.
+ * visitor watching a screening. Connections optionally attach JWT identity for
+ * per-holder hold-expiry notifications, but remain unauthenticated/public by
+ * default — the only mutating action (reserve/cancel) is already guarded over
+ * HTTP; this gateway only pushes state, it never accepts one.
  */
-@WebSocketGateway({ cors: { origin: process.env.FRONTEND_URL } })
+@WebSocketGateway({
+  cors: { origin: process.env.FRONTEND_URL, credentials: true },
+})
 export class ScreeningGateway
   implements OnGatewayConnection, OnGatewayDisconnect
 {
   @WebSocketServer()
   server: Server;
 
+  private readonly userSockets = new Map<number, Set<Socket>>();
+
   constructor(
     private readonly screeningsService: ScreeningsService,
+    private readonly jwtService: JwtService,
     @InjectMetric('websocket_connections_current')
     private readonly connectionsGauge: Gauge<string>,
     @InjectMetric('websocket_room_joins_total')
     private readonly joinsCounter: Counter<string>,
   ) {}
 
+  private extractCookie(
+    header: string | undefined,
+    name: string,
+  ): string | null {
+    if (!header) return null;
+    const match = header.match(new RegExp(`(?:^|;\\s*)${name}=([^;]+)`));
+    return match ? decodeURIComponent(match[1]) : null;
+  }
+
   handleConnection(client: Socket): void {
-    // DEFERRED(phase-7): attach holder identity here (verify the httpOnly
-    // access_token cookie via JwtService) once per-holder hold-expiry
-    // notifications need to target a specific socket. Requires re-enabling
-    // `credentials: true` in the gateway's CORS options above.
-    void client;
+    const cookieHeader = client.handshake.headers.cookie;
+    const token = this.extractCookie(cookieHeader, 'access_token');
+    if (token) {
+      try {
+        const payload = this.jwtService.verify<AccessPayload>(token, {
+          secret: process.env.JWT_ACCESS_SECRET,
+        });
+        client.data.userId = payload.sub;
+        const sockets = this.userSockets.get(payload.sub) ?? new Set<Socket>();
+        sockets.add(client);
+        this.userSockets.set(payload.sub, sockets);
+      } catch {
+        // Invalid/expired token: proceed as an anonymous connection, same as
+        // having no cookie at all. This gateway never requires auth.
+      }
+    }
     this.connectionsGauge.inc();
   }
 
   handleDisconnect(client: Socket): void {
-    void client;
+    const userId = client.data.userId as number | undefined;
+    if (userId !== undefined) {
+      const sockets = this.userSockets.get(userId);
+      sockets?.delete(client);
+      if (sockets && sockets.size === 0) this.userSockets.delete(userId);
+    }
     this.connectionsGauge.dec();
   }
 
@@ -90,12 +123,13 @@ export class ScreeningGateway
     }
   }
 
-  // DEFERRED(phase-7): subscribe to the Redis Pub/Sub `seat:hold_expired`
-  // channel here (published by the phase-6 cron job) and call emitToRoom to
-  // broadcast it, plus a direct emit to the holder's socket (see the
-  // handleConnection marker above for where that identity gets attached).
-
   emitToRoom(screeningId: number, event: string, payload: unknown): void {
     this.server.to(roomName(screeningId)).emit(event, payload);
+  }
+
+  emitToUser(userId: number, event: string, payload: unknown): void {
+    const sockets = this.userSockets.get(userId);
+    if (!sockets) return;
+    for (const socket of sockets) socket.emit(event, payload);
   }
 }

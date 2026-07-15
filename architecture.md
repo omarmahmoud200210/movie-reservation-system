@@ -583,14 +583,10 @@ src/
 4. **Reservations (HTTP)** — reserve, cancel with `SELECT FOR UPDATE` ✅
 5. **WebSocket Gateway** — rooms, initial state, authentication ✅
 6. **Cron Jobs** — hold expiry ✅ (screening completion deferred, no current consumer; payment reconciliation deferred to phase 9, needs the Payments module)
-7. **Redis Pub/Sub bridge** — connect cron to gateway (Skipped)
-8. **Rate Limiting** — middleware + guard ✅
-9. **Payment** — Stripe checkout, webhook handler, refund logic ✅
-
-
-10. **Observability** — Prometheus metrics, Grafana dashboards
-
-11. **Load Testing** — Artillery scenarios, tune under Grafana observation
+7. **Rate Limiting** — middleware + guard ✅
+8. **Payment** — Stripe checkout, webhook handler, refund logic ✅
+9. **Observability** — Prometheus metrics, Grafana dashboards ✅
+10. **Load Testing** — Artillery scenarios, tune under Grafana observation ✅
 
 12. **Security hardening** — HTTPS, input validation, JWT in cookies
 13. **Integration Wiring** — walk every `DEFERRED(phase-N)` marker across all
@@ -601,7 +597,7 @@ src/
     `grep -rn "DEFERRED(phase-" backend/src`. Known seams so far:
     - Reservations → WebSocket broadcast (phase 5, ✅ resolved when phase 5 shipped)
     - Reservations → Cron hold-expiry consuming `heldUntil` (phase 6, ✅ resolved when phase 6 shipped)
-    - Gateway → Redis Pub/Sub `seat:hold_expired` + per-holder notification (phase 7)
+    - Gateway → per-holder hold-expiry notification (phase 7, ✅ resolved without Redis Pub/Sub — room-wide broadcast already worked via the existing in-process EventEmitter2 path; per-holder targeting only needed JWT identity on the socket, added via `access_token` cookie verification in `handleConnection`. `RedisPubSub` was unused dead code and has been removed.)
     - Reservations `POST` → rate limiting (phase 8)
     - Reservations / Gateway → `HELD → CONFIRMED` / `BOOKED` on payment (phase 9)
     - Cron → payment reconciliation job (finds `timed_out` payments, reconciles with Stripe) (phase 9)
