@@ -23,6 +23,8 @@ let RedisCache = RedisCache_1 = class RedisCache {
         this.redis = new ioredis_1.default({
             host: process.env.REDIS_CACHE_HOST ?? 'localhost',
             port: Number(process.env.REDIS_CACHE_PORT ?? 6379),
+            password: process.env.REDIS_CACHE_PASSWORD,
+            tls: process.env.REDIS_CACHE_TLS === 'true' ? {} : undefined,
         });
         this.redis.on('connect', () => this.logger.log('Redis Caching connected'));
         this.redis.on('error', (err) => this.logger.error('Redis Caching error', err));

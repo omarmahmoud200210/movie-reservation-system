@@ -65,6 +65,13 @@ export class ScreeningGateway
   }
 
   handleConnection(client: Socket): void {
+    const origin = client.handshake.headers.origin;
+    const allowedOrigin = process.env.FRONTEND_URL;
+    if (origin && allowedOrigin && origin !== allowedOrigin) {
+      client.disconnect();
+      return;
+    }
+
     const cookieHeader = client.handshake.headers.cookie;
     const token = this.extractCookie(cookieHeader, 'access_token');
     if (token) {

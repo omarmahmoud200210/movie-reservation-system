@@ -13,6 +13,7 @@ import { MailerService } from '../mailer/mailer.service';
 import { AuthService } from '../auth/auth.service';
 import { TokenService } from '../auth/token.service';
 import type { AuthUser } from '../auth/token.service';
+import { AuditService } from '../common/services/audit.service';
 
 @Injectable()
 export class UsersService {
@@ -23,6 +24,7 @@ export class UsersService {
     private readonly mailer: MailerService,
     private readonly authService: AuthService,
     private readonly tokenService: TokenService,
+    private readonly audit: AuditService,
   ) {}
 
   async updateName(userId: number, name: string): Promise<AuthUser> {
@@ -51,6 +53,7 @@ export class UsersService {
     );
     const code = await this.otp.issue(newEmail);
     await this.mailer.sendOtpEmail(newEmail, code);
+    await this.audit.record({ action: 'email.change.requested', actorId: userId, metadata: { newEmail } });
     return { message: 'Verification code sent to new email' };
   }
 
@@ -88,8 +91,10 @@ export class UsersService {
     const hash = await bcrypt.hash(newPassword, 10);
     await this.usersRepo.updatePassword(userId, hash);
 
+    await this.tokenService.incrementAccessVersion(userId);
     await this.tokenService.revokeAllSessions(userId);
     const authUser = await this.authService.getAuthUser(userId);
     await this.tokenService.issueAuthCookies(res, authUser);
+    await this.audit.record({ action: 'password.changed', actorId: userId });
   }
 }

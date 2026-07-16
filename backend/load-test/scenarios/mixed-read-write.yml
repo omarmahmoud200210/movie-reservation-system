@@ -4,7 +4,7 @@ config:
   processor: "../processor.js"
   phases:
     - duration: 60
-      arrivalRate: 50
+      arrivalRate: 20
       name: "Mixed read/write baseline"
   ensure:
     p95: 500

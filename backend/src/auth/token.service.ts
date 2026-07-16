@@ -16,6 +16,7 @@ interface AccessPayload {
   name: string;
   email: string;
   role: string;
+  ver: number;
 }
 
 interface RefreshPayload {
@@ -28,6 +29,16 @@ const REFRESH_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7d
 const REFRESH_TTL_SECONDS = 7 * 24 * 60 * 60;
 const REFRESH_COOKIE_PATH = '/api/v1/auth/refresh';
 
+const ROTATE_SCRIPT = `
+local exists = redis.call('GET', KEYS[1])
+if not exists then
+  return {0}
+end
+redis.call('DEL', KEYS[1])
+redis.call('SET', ARGV[1], '1', 'EX', ARGV[2])
+return {1}
+`;
+
 @Injectable()
 export class TokenService {
   constructor(
@@ -35,9 +46,10 @@ export class TokenService {
     private readonly redis: RedisCache,
   ) {}
 
-  private signAccess(user: AuthUser): string {
+  private async signAccess(user: AuthUser): Promise<string> {
+    const ver = await this.getAccessVersion(user.id);
     return this.jwt.sign(
-      { sub: user.id, name: user.name, email: user.email, role: user.role },
+      { sub: user.id, name: user.name, email: user.email, role: user.role, ver },
       {
         secret: process.env.JWT_ACCESS_SECRET,
         expiresIn: process.env.JWT_ACCESS_EXPIRES_IN,
@@ -60,7 +72,7 @@ export class TokenService {
 
   /** Sign a fresh access+refresh pair, persist the refresh jti, and set cookies. */
   async issueAuthCookies(res: Response, user: AuthUser): Promise<void> {
-    const access = this.signAccess(user);
+    const access = await this.signAccess(user);
     const { token: refresh, jti } = this.signRefresh(user);
     await this.redis.set(
       this.refreshKey(user.id, jti),
@@ -72,21 +84,43 @@ export class TokenService {
   }
 
   /**
-   * Validate the incoming refresh jti, rotate it (delete old, issue new), and
-   * set new cookies. Throws 401 if the jti is unknown/revoked.
+   * Atomically rotate a refresh token: validate old jti, delete it, persist
+   * the new one — all in a single Lua eval. Throws 401 if the old jti is
+   * unknown/revoked (theft detection: if a concurrent request already consumed
+   * it, the legitimate user is the loser and must re-auth).
    */
   async rotateAuthCookies(
     res: Response,
     payload: { id: number; jti: string },
     user: AuthUser,
   ): Promise<void> {
-    const key = this.refreshKey(payload.id, payload.jti);
-    const exists = await this.redis.get(key);
-    if (!exists) {
+    const oldKey = this.refreshKey(payload.id, payload.jti);
+    const { token: newRefresh, jti: newJti } = this.signRefresh(user);
+    const newKey = this.refreshKey(user.id, newJti);
+
+    const result = await this.redis.getClient().eval(
+      ROTATE_SCRIPT, 1, oldKey, newKey, String(REFRESH_TTL_SECONDS),
+    ) as [number];
+
+    if (result[0] === 0) {
       throw new UnauthorizedException('Refresh token revoked or expired');
     }
-    await this.redis.del(key);
-    await this.issueAuthCookies(res, user);
+
+    const access = await this.signAccess(user);
+    this.setAuthCookies(res, access, newRefresh);
+  }
+
+  private accessVersionKey(userId: number): string {
+    return `access_version:${userId}`;
+  }
+
+  async incrementAccessVersion(userId: number): Promise<void> {
+    await this.redis.incr(this.accessVersionKey(userId));
+  }
+
+  async getAccessVersion(userId: number): Promise<number> {
+    const val = await this.redis.get(this.accessVersionKey(userId));
+    return val ? Number(val) : 0;
   }
 
   /**
@@ -121,7 +155,7 @@ export class TokenService {
     const base = {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax' as const,
+      sameSite: 'strict' as const,
       domain: process.env.COOKIE_DOMAIN,
     };
     res.cookie('access_token', access, { ...base, maxAge: ACCESS_MAX_AGE_MS });

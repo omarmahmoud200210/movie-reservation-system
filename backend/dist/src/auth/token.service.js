@@ -21,6 +21,15 @@ const ACCESS_MAX_AGE_MS = 15 * 60 * 1000;
 const REFRESH_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const REFRESH_TTL_SECONDS = 7 * 24 * 60 * 60;
 const REFRESH_COOKIE_PATH = '/api/v1/auth/refresh';
+const ROTATE_SCRIPT = `
+local exists = redis.call('GET', KEYS[1])
+if not exists then
+  return {0}
+end
+redis.call('DEL', KEYS[1])
+redis.call('SET', ARGV[1], '1', 'EX', ARGV[2])
+return {1}
+`;
 let TokenService = class TokenService {
     jwt;
     redis;
@@ -28,8 +37,9 @@ let TokenService = class TokenService {
         this.jwt = jwt;
         this.redis = redis;
     }
-    signAccess(user) {
-        return this.jwt.sign({ sub: user.id, name: user.name, email: user.email, role: user.role }, {
+    async signAccess(user) {
+        const ver = await this.getAccessVersion(user.id);
+        return this.jwt.sign({ sub: user.id, name: user.name, email: user.email, role: user.role, ver }, {
             secret: process.env.JWT_ACCESS_SECRET,
             expiresIn: process.env.JWT_ACCESS_EXPIRES_IN,
         });
@@ -46,19 +56,31 @@ let TokenService = class TokenService {
         return `refresh:${userId}:${jti}`;
     }
     async issueAuthCookies(res, user) {
-        const access = this.signAccess(user);
+        const access = await this.signAccess(user);
         const { token: refresh, jti } = this.signRefresh(user);
         await this.redis.set(this.refreshKey(user.id, jti), '1', 'EX', REFRESH_TTL_SECONDS);
         this.setAuthCookies(res, access, refresh);
     }
     async rotateAuthCookies(res, payload, user) {
-        const key = this.refreshKey(payload.id, payload.jti);
-        const exists = await this.redis.get(key);
-        if (!exists) {
+        const oldKey = this.refreshKey(payload.id, payload.jti);
+        const { token: newRefresh, jti: newJti } = this.signRefresh(user);
+        const newKey = this.refreshKey(user.id, newJti);
+        const result = await this.redis.getClient().eval(ROTATE_SCRIPT, 1, oldKey, newKey, String(REFRESH_TTL_SECONDS));
+        if (result[0] === 0) {
             throw new common_1.UnauthorizedException('Refresh token revoked or expired');
         }
-        await this.redis.del(key);
-        await this.issueAuthCookies(res, user);
+        const access = await this.signAccess(user);
+        this.setAuthCookies(res, access, newRefresh);
+    }
+    accessVersionKey(userId) {
+        return `access_version:${userId}`;
+    }
+    async incrementAccessVersion(userId) {
+        await this.redis.incr(this.accessVersionKey(userId));
+    }
+    async getAccessVersion(userId) {
+        const val = await this.redis.get(this.accessVersionKey(userId));
+        return val ? Number(val) : 0;
     }
     signLinkState(userId) {
         return this.jwt.sign({ sub: userId }, {
@@ -84,7 +106,7 @@ let TokenService = class TokenService {
         const base = {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
+            sameSite: 'strict',
             domain: process.env.COOKIE_DOMAIN,
         };
         res.cookie('access_token', access, { ...base, maxAge: ACCESS_MAX_AGE_MS });

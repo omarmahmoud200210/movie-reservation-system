@@ -39,10 +39,11 @@ export class AuthRepository {
     });
   }
 
-  markEmailVerified(id: number): Promise<User> {
+  markEmailVerified(id: number): Promise<Omit<User, 'password'>> {
     return this.prisma.user.update({
       where: { id },
       data: { emailVerified: true },
+      select: { id: true, name: true, email: true, emailVerified: true, role: true, googleId: true, createdAt: true, updatedAt: true },
     });
   }
 }

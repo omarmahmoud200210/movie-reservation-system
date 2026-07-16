@@ -11,6 +11,9 @@ import {
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { AuditService } from '../common/services/audit.service';
+import type { AuthUser } from '../auth/token.service';
 import { CreateScreeningDto } from './dto/create-screening.dto';
 import { UpdateScreeningDto } from './dto/update-screening.dto';
 import { ScreeningsService } from './screenings.service';
@@ -23,28 +26,40 @@ import { ScreeningsService } from './screenings.service';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles('ADMIN')
 export class ScreeningsAdminController {
-  constructor(private readonly screeningsService: ScreeningsService) {}
+  constructor(
+    private readonly screeningsService: ScreeningsService,
+    private readonly audit: AuditService,
+  ) {}
 
   @Post()
-  create(@Body() dto: CreateScreeningDto) {
-    return this.screeningsService.createScreening(dto);
+  async create(@Body() dto: CreateScreeningDto, @CurrentUser() user: AuthUser) {
+    const screening = await this.screeningsService.createScreening(dto);
+    await this.audit.record({ action: 'screening.created', actorId: user.id, targetType: 'screening', targetId: screening.id });
+    return screening;
   }
 
   @Patch(':id')
-  update(
+  async update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateScreeningDto,
+    @CurrentUser() user: AuthUser,
   ) {
-    return this.screeningsService.updateScreening(id, dto);
+    const screening = await this.screeningsService.updateScreening(id, dto);
+    await this.audit.record({ action: 'screening.updated', actorId: user.id, targetType: 'screening', targetId: id });
+    return screening;
   }
 
   @Patch(':id/cancel')
-  cancel(@Param('id', ParseIntPipe) id: number) {
-    return this.screeningsService.cancelScreening(id);
+  async cancel(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: AuthUser) {
+    const screening = await this.screeningsService.cancelScreening(id);
+    await this.audit.record({ action: 'screening.cancelled', actorId: user.id, targetType: 'screening', targetId: id });
+    return screening;
   }
 
   @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number) {
-    return this.screeningsService.deleteScreening(id);
+  async remove(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: AuthUser) {
+    const result = await this.screeningsService.deleteScreening(id);
+    await this.audit.record({ action: 'screening.deleted', actorId: user.id, targetType: 'screening', targetId: id });
+    return result;
   }
 }

@@ -2,6 +2,7 @@ import { Module, MiddlewareConsumer, NestModule, RequestMethod } from '@nestjs/c
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { IpRateLimitMiddleware } from './common/middleware/ip-rate-limit.middleware';
 import { MetricsInterceptor } from './common/interceptors/metrics.interceptor';
+import { CommonModule } from './common/common.module';
 import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -26,6 +27,7 @@ import { PaymentsModule } from './payments/payments.module';
     }),
     EventEmitterModule.forRoot(),
     ScheduleModule.forRoot(),
+    CommonModule,
     PrismaModule,
     RedisModule,
     MetricsModule,
@@ -46,6 +48,10 @@ export class AppModule implements NestModule {
     consumer.apply(IpRateLimitMiddleware).forRoutes(
       { path: 'auth/login', method: RequestMethod.POST },
       { path: 'movies', method: RequestMethod.GET },
+      { path: 'auth/register', method: RequestMethod.POST },
+      { path: 'auth/verify-otp', method: RequestMethod.POST },
+      { path: 'auth/resend-otp', method: RequestMethod.POST },
+      { path: 'auth/refresh', method: RequestMethod.POST },
     );
   }
 }

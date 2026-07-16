@@ -12,16 +12,16 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.RedisModule = void 0;
 const common_1 = require("@nestjs/common");
 const redis_cache_1 = __importDefault(require("./redis.cache"));
-const redis_pubsub_1 = __importDefault(require("./redis.pubsub"));
 const rate_limiter_service_1 = __importDefault(require("./rate-limiter.service"));
+const payment_abuse_service_1 = __importDefault(require("./payment-abuse.service"));
 let RedisModule = class RedisModule {
 };
 exports.RedisModule = RedisModule;
 exports.RedisModule = RedisModule = __decorate([
     (0, common_1.Global)(),
     (0, common_1.Module)({
-        providers: [redis_cache_1.default, redis_pubsub_1.default, rate_limiter_service_1.default],
-        exports: [redis_cache_1.default, redis_pubsub_1.default, rate_limiter_service_1.default],
+        providers: [redis_cache_1.default, rate_limiter_service_1.default, payment_abuse_service_1.default],
+        exports: [redis_cache_1.default, rate_limiter_service_1.default, payment_abuse_service_1.default],
     })
 ], RedisModule);
 //# sourceMappingURL=redis.module.js.map

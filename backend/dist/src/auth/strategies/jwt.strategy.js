@@ -13,8 +13,10 @@ exports.JwtStrategy = void 0;
 const common_1 = require("@nestjs/common");
 const passport_1 = require("@nestjs/passport");
 const passport_jwt_1 = require("passport-jwt");
+const token_service_1 = require("../token.service");
 let JwtStrategy = class JwtStrategy extends (0, passport_1.PassportStrategy)(passport_jwt_1.Strategy, 'jwt') {
-    constructor() {
+    tokenService;
+    constructor(tokenService) {
         super({
             jwtFromRequest: passport_jwt_1.ExtractJwt.fromExtractors([
                 (req) => req?.cookies?.access_token ??
@@ -23,14 +25,19 @@ let JwtStrategy = class JwtStrategy extends (0, passport_1.PassportStrategy)(pas
             ignoreExpiration: false,
             secretOrKey: process.env.JWT_ACCESS_SECRET,
         });
+        this.tokenService = tokenService;
     }
-    validate(payload) {
+    async validate(payload) {
+        const currentVersion = await this.tokenService.getAccessVersion(payload.sub);
+        if (payload.ver < currentVersion) {
+            throw new common_1.UnauthorizedException('Token revoked — please log in again');
+        }
         return { id: payload.sub, email: payload.email, role: payload.role, name: payload.name };
     }
 };
 exports.JwtStrategy = JwtStrategy;
 exports.JwtStrategy = JwtStrategy = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [])
+    __metadata("design:paramtypes", [token_service_1.TokenService])
 ], JwtStrategy);
 //# sourceMappingURL=jwt.strategy.js.map

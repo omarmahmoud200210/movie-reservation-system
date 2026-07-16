@@ -6,25 +6,27 @@ import { RegisterDto } from './dto/register.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { ResendOtpDto } from './dto/resend-otp.dto';
 import { AuthUser } from './token.service';
+import { AuditService } from '../common/services/audit.service';
 export declare class AuthService {
     private readonly repo;
     private readonly otp;
     private readonly mailer;
-    constructor(repo: AuthRepository, otp: OtpService, mailer: MailerService);
+    private readonly audit;
+    constructor(repo: AuthRepository, otp: OtpService, mailer: MailerService, audit: AuditService);
     register(dto: RegisterDto): Promise<{
         message: string;
     }>;
-    verifyOtp(dto: VerifyOtpDto): Promise<{
+    verifyOtp(dto: VerifyOtpDto): Promise<Omit<{
         name: string;
+        createdAt: Date;
+        updatedAt: Date;
         id: number;
         email: string;
         password: string | null;
         emailVerified: boolean;
         googleId: string | null;
         role: import("@prisma/client").$Enums.UserRole;
-        createdAt: Date;
-        updatedAt: Date;
-    }>;
+    }, "password">>;
     validateUser(email: string, password: string): Promise<User>;
     getAuthUser(id: number): Promise<AuthUser>;
     resolveGoogleUser(p: {

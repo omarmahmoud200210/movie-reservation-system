@@ -15,17 +15,17 @@ export declare class AuthController {
     register(dto: RegisterDto): Promise<{
         message: string;
     }>;
-    verifyOtp(dto: VerifyOtpDto, res: Response): Promise<{
+    verifyOtp(dto: VerifyOtpDto, res: Response): Promise<Omit<{
         name: string;
+        createdAt: Date;
+        updatedAt: Date;
         id: number;
         email: string;
         password: string | null;
         emailVerified: boolean;
         googleId: string | null;
         role: import("@prisma/client").$Enums.UserRole;
-        createdAt: Date;
-        updatedAt: Date;
-    }>;
+    }, "password">>;
     resendOtp(dto: ResendOtpDto): Promise<{
         message: string;
     }>;
@@ -33,9 +33,9 @@ export declare class AuthController {
     refresh(user: RefreshUser, res: Response): Promise<{
         message: string;
     }>;
-    logout(res: Response): {
+    logout(user: AuthUser, res: Response): Promise<{
         message: string;
-    };
+    }>;
     me(user: AuthUser): AuthUser;
     googleAuth(): void;
     googleCallback(profile: GoogleProfile, res: Response): Promise<void>;

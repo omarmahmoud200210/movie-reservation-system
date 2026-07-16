@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { ReservationsService } from '../reservations/reservations.service';
 import { PaymentsService } from '../payments/payments.service';
+import { AuditService } from '../common/services/audit.service';
 
 /**
  * Releases HELD reservations whose 10-minute hold has expired, every minute.
@@ -18,12 +19,14 @@ export class HoldExpiryCron {
   constructor(
     private readonly reservationsService: ReservationsService,
     private readonly paymentsService: PaymentsService,
+    private readonly audit: AuditService,
   ) {}
 
   @Cron(CronExpression.EVERY_MINUTE)
   async handleExpireHolds(): Promise<void> {
     try {
       await this.reservationsService.expireHolds();
+      await this.audit.record({ action: 'hold.expiry' });
     } catch (err) {
       this.logger.error('expireHolds tick failed', err as Error);
     }

@@ -44,6 +44,7 @@ let AuthRepository = class AuthRepository {
         return this.prisma.user.update({
             where: { id },
             data: { emailVerified: true },
+            select: { id: true, name: true, email: true, emailVerified: true, role: true, googleId: true, createdAt: true, updatedAt: true },
         });
     }
 };

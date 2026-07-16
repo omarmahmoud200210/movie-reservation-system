@@ -1,10 +1,29 @@
-version: '3.8'
 services:
   redis-cache:
-    image: redis7
+    image: redis:7
     ports:
-      - '6379:6379'
-  redis-pubsub:
-    image: redis7
+      - '127.0.0.1:6379:6379'
+
+  db:
+    image: postgres:16
     ports:
-      - '6380:6380'
+      - '127.0.0.1:5432:5432'
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "[PASSWORD]"
+      POSTGRES_DB: moviereservationsystem
+    command:
+      - "postgres"
+      - "-c" 
+      - "max_connections=200"
+      - "-c"
+      - "shared_buffers=256MB"
+      - "-c"
+      - "work_mem=8MB"
+      - "-c"
+      - "effective_cache_size=512MB"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

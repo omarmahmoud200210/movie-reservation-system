@@ -14,6 +14,7 @@ import { RegisterDto } from './dto/register.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { ResendOtpDto } from './dto/resend-otp.dto';
 import { AuthUser } from './token.service';
+import { AuditService } from '../common/services/audit.service';
 
 @Injectable()
 export class AuthService {
@@ -21,11 +22,14 @@ export class AuthService {
     private readonly repo: AuthRepository,
     private readonly otp: OtpService,
     private readonly mailer: MailerService,
+    private readonly audit: AuditService,
   ) {}
 
   async register(dto: RegisterDto) {
     const existing = await this.repo.findByEmail(dto.email);
-    if (existing) throw new ConflictException('Email already registered');
+    if (existing) {
+      return { message: 'If eligible, a verification code was sent' };
+    }
 
     const hash = await bcrypt.hash(dto.password, 10);
     const user = await this.repo.createUser({
@@ -36,7 +40,8 @@ export class AuthService {
 
     const code = await this.otp.issue(user.email);
     await this.mailer.sendOtpEmail(user.email, code);
-    return { message: 'Verification code sent' };
+    await this.audit.record({ action: 'user.registered', targetType: 'user', targetId: user.id });
+    return { message: 'If eligible, a verification code was sent' };
   }
 
   async verifyOtp(dto: VerifyOtpDto) {
@@ -63,6 +68,7 @@ export class AuthService {
     }
     const matches = await bcrypt.compare(password, user.password);
     if (!matches) {
+      await this.audit.record({ action: 'login.failed', actorId: user.id, metadata: { reason: 'wrong_password' } });
       throw new UnauthorizedException('Invalid email or password');
     }
     if (!user.emailVerified) {

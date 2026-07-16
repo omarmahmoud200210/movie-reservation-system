@@ -11,7 +11,16 @@ export class PrismaService
   private pool: Pool;
 
   constructor() {
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    const pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      max: 100,
+      min: 10,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
+      ...(process.env.NODE_ENV === 'production' && {
+        ssl: { rejectUnauthorized: true },
+      }),
+    });
     const adapter = new PrismaPg(pool);
     super({ adapter });
     this.pool = pool;

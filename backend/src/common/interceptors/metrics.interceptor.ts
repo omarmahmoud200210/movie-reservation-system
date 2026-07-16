@@ -17,6 +17,8 @@ export class MetricsInterceptor implements NestInterceptor {
     private readonly requestsCounter: Counter<string>,
     @InjectMetric('http_request_duration_seconds')
     private readonly durationHistogram: Histogram<string>,
+    @InjectMetric('http_response_size_bytes')
+    private readonly responseSizeHistogram: Histogram<string>,
   ) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
@@ -35,10 +37,16 @@ export class MetricsInterceptor implements NestInterceptor {
         route,
         status_code: String(response.statusCode),
       };
+
       const durationSeconds =
         Number(process.hrtime.bigint() - start) / 1_000_000_000;
+
+      const contentLength = response.getHeader('content-length');
+      const responseSize = contentLength ? Number(contentLength) : 0;
+
       this.requestsCounter.inc(labels);
       this.durationHistogram.observe(labels, durationSeconds);
+      this.responseSizeHistogram.observe(labels, responseSize);
     };
 
     return next.handle().pipe(tap({ next: record, error: record }));

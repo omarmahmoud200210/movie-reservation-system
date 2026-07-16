@@ -16,6 +16,10 @@ describe('AppModule', () => {
       expect(forRoutes).toHaveBeenCalledWith(
         { path: 'auth/login', method: RequestMethod.POST },
         { path: 'movies', method: RequestMethod.GET },
+        { path: 'auth/register', method: RequestMethod.POST },
+        { path: 'auth/verify-otp', method: RequestMethod.POST },
+        { path: 'auth/resend-otp', method: RequestMethod.POST },
+        { path: 'auth/refresh', method: RequestMethod.POST },
       );
     });
   });

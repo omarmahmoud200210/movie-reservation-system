@@ -7,6 +7,7 @@ import { PaymentsRepository } from '../payments.repository';
 import { ReservationsService } from '../../reservations/reservations.service';
 import { ScreeningsRepository } from '../../screenings/screenings.repository';
 import PaymentAbuseService from '../../redis/payment-abuse.service';
+import { AuditService } from '../../common/services/audit.service';
 import {
   RESERVATION_CANCELLED,
   RESERVATION_CONFIRMED,
@@ -49,6 +50,7 @@ const mockReservationsService = {
 const mockScreeningsRepo = { findById: jest.fn() };
 const mockPaymentAbuse = { recordFailure: jest.fn() };
 const mockEvents = { emit: jest.fn() };
+const mockAudit = { record: jest.fn() };
 const mockMetrics = {
   paymentsSucceeded: { inc: jest.fn() },
   paymentsFailed: { inc: jest.fn() },
@@ -82,6 +84,7 @@ describe('PaymentsService', () => {
         { provide: getToken('payments_declined_total'), useValue: mockMetrics.paymentsDeclined },
         { provide: getToken('payments_timed_out_total'), useValue: mockMetrics.paymentsTimedOut },
         { provide: getToken('payments_refunded_total'), useValue: mockMetrics.paymentsRefunded },
+        { provide: AuditService, useValue: mockAudit },
       ],
     }).compile();
 

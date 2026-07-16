@@ -16,10 +16,44 @@
         }
       ]
     },
+
+    {
+      "type": "timeseries",
+      "title": "Responses exceeding 1 MSS (%)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "expr": "100 * (1 - sum(rate(http_response_size_bytes_bucket{le=\"1460\"}[5m])) by (route) / sum(rate(http_response_size_bytes_count[5m])) by (route))",
+          "legendFormat": "{{route}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Average response size (bytes)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "(sum(rate(http_response_size_bytes_sum[5m])) by (route)) / (sum(rate(http_response_size_bytes_count[5m])) by (route))",
+          "legendFormat": "{{route}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Response count rate (per route)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(http_response_size_bytes_count[5m])) by (route)",
+          "legendFormat": "{{route}}"
+        }
+      ]
+    },
     {
       "type": "timeseries",
       "title": "HTTP p95 latency",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
       "targets": [
         {
           "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, route))",
@@ -30,44 +64,71 @@
     {
       "type": "timeseries",
       "title": "Reservations funnel (rate)",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
       "targets": [
-        { "expr": "rate(reservations_created_total[5m])", "legendFormat": "created" },
-        { "expr": "rate(reservations_cancelled_total[5m])", "legendFormat": "cancelled" },
-        { "expr": "rate(reservations_confirmed_total[5m])", "legendFormat": "confirmed" }
+        {
+          "expr": "rate(reservations_created_total[5m])",
+          "legendFormat": "created"
+        },
+        {
+          "expr": "rate(reservations_cancelled_total[5m])",
+          "legendFormat": "cancelled"
+        },
+        {
+          "expr": "rate(reservations_confirmed_total[5m])",
+          "legendFormat": "confirmed"
+        }
       ]
     },
     {
       "type": "stat",
       "title": "Reservations currently HELD",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
       "targets": [{ "expr": "reservations_held_current" }]
     },
     {
       "type": "timeseries",
       "title": "Payments funnel (rate)",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
       "targets": [
-        { "expr": "rate(payments_succeeded_total[5m])", "legendFormat": "succeeded" },
+        {
+          "expr": "rate(payments_succeeded_total[5m])",
+          "legendFormat": "succeeded"
+        },
         { "expr": "rate(payments_failed_total[5m])", "legendFormat": "failed" },
-        { "expr": "rate(payments_declined_total[5m])", "legendFormat": "declined" },
-        { "expr": "rate(payments_timed_out_total[5m])", "legendFormat": "timed out" },
-        { "expr": "rate(payments_refunded_total[5m])", "legendFormat": "refunded" }
+        {
+          "expr": "rate(payments_declined_total[5m])",
+          "legendFormat": "declined"
+        },
+        {
+          "expr": "rate(payments_timed_out_total[5m])",
+          "legendFormat": "timed out"
+        },
+        {
+          "expr": "rate(payments_refunded_total[5m])",
+          "legendFormat": "refunded"
+        }
       ]
     },
     {
       "type": "stat",
       "title": "Payment-abuse lockouts (total)",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
       "targets": [{ "expr": "payment_abuse_lockouts_total" }]
     },
     {
       "type": "timeseries",
       "title": "WebSocket activity",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
       "targets": [
-        { "expr": "websocket_connections_current", "legendFormat": "connections" },
-        { "expr": "rate(websocket_room_joins_total[5m])", "legendFormat": "joins/s" },
+        {
+          "expr": "websocket_connections_current",
+          "legendFormat": "connections"
+        },
+        {
+          "expr": "rate(websocket_room_joins_total[5m])",
+          "legendFormat": "joins/s"
+        },
         {
           "expr": "sum(rate(websocket_broadcasts_total[5m])) by (event)",
           "legendFormat": "{{event}}"
@@ -77,11 +138,20 @@
     {
       "type": "timeseries",
       "title": "Node process health",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 40 },
       "targets": [
-        { "expr": "process_resident_memory_bytes", "legendFormat": "RSS memory" },
-        { "expr": "nodejs_eventloop_lag_seconds", "legendFormat": "event-loop lag" },
-        { "expr": "rate(process_cpu_user_seconds_total[1m])", "legendFormat": "CPU" }
+        {
+          "expr": "process_resident_memory_bytes",
+          "legendFormat": "RSS memory"
+        },
+        {
+          "expr": "nodejs_eventloop_lag_seconds",
+          "legendFormat": "event-loop lag"
+        },
+        {
+          "expr": "rate(process_cpu_user_seconds_total[1m])",
+          "legendFormat": "CPU"
+        }
       ]
     }
   ]

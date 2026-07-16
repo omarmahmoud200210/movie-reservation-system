@@ -22,6 +22,7 @@ import { PaymentsRepository } from './payments.repository';
 import { ReservationsService } from '../reservations/reservations.service';
 import { ScreeningsRepository } from '../screenings/screenings.repository';
 import PaymentAbuseService from '../redis/payment-abuse.service';
+import { AuditService } from '../common/services/audit.service';
 import {
   RESERVATION_CANCELLED,
   RESERVATION_CONFIRMED,
@@ -35,7 +36,7 @@ const CURRENCY = 'usd';
 @Injectable()
 export class PaymentsService {
   private readonly logger = new Logger(PaymentsService.name);
-  private readonly stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string);
+  private readonly stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, { apiVersion: '2025-02-24.acacia' as any });
 
   constructor(
     private readonly paymentsRepo: PaymentsRepository,
@@ -54,6 +55,7 @@ export class PaymentsService {
     private readonly paymentsTimedOut: Counter<string>,
     @InjectMetric('payments_refunded_total')
     private readonly paymentsRefunded: Counter<string>,
+    private readonly audit: AuditService,
   ) {}
 
   async createCheckoutSession(
@@ -201,6 +203,7 @@ export class PaymentsService {
         stripePaymentId: session.payment_intent as string,
       });
       this.paymentsSucceeded.inc();
+      await this.audit.record({ action: 'payment.succeeded', targetType: 'payment', targetId: paymentId });
       return;
     }
 
@@ -222,6 +225,7 @@ export class PaymentsService {
     );
     await this.paymentAbuse.recordFailure(reservation.userId);
     this.paymentsFailed.inc();
+    await this.audit.record({ action: 'payment.failed', targetType: 'payment', targetId: payment.id });
   }
 
   private async handleCheckoutExpired(event: Stripe.Event): Promise<void> {
@@ -251,6 +255,7 @@ export class PaymentsService {
       disputedAt: new Date(),
       stripeEventId: event.id,
     });
+    await this.audit.record({ action: 'payment.dispute', targetType: 'payment', targetId: payment.id, metadata: { reason: dispute.reason } });
   }
 
   async refundReservation(reservation: Reservation): Promise<Reservation> {
@@ -300,6 +305,7 @@ export class PaymentsService {
         refundedAt: new Date(),
       });
       this.paymentsRefunded.inc();
+      await this.audit.record({ action: 'payment.refunded', targetType: 'payment', targetId: payment.id, metadata: { refundId } });
 
       return await this.reservationsService.finalizeCancel(reservation);
     } catch (err) {

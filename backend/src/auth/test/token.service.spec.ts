@@ -78,7 +78,7 @@ describe('TokenService', () => {
 
       expect(mockJwt.sign).toHaveBeenNthCalledWith(
         1,
-        { sub: user.id, name: user.name, email: user.email, role: user.role },
+        { sub: user.id, name: user.name, email: user.email, role: user.role, ver: 0 },
         { secret: 'access-secret', expiresIn: '15m' },
       );
     });
@@ -122,49 +122,45 @@ describe('TokenService', () => {
 
   describe('rotateAuthCookies', () => {
     const payload = { id: user.id, jti: 'old-jti' };
+    const mockClient = { eval: jest.fn() };
 
     it('deletes the old refresh key and issues fresh cookies when the key exists', async () => {
-      mockRedis.get.mockResolvedValue('1');
+      mockRedis.getClient.mockReturnValue(mockClient);
+      mockClient.eval.mockResolvedValue([1]);
 
       await service.rotateAuthCookies(res as unknown as Response, payload, user);
 
-      expect(mockRedis.get).toHaveBeenCalledWith(
+      expect(mockRedis.getClient).toHaveBeenCalled();
+      expect(mockClient.eval).toHaveBeenCalledWith(
+        expect.stringContaining('redis.call'),
+        1,
         `refresh:${payload.id}:${payload.jti}`,
-      );
-      expect(mockRedis.del).toHaveBeenCalledWith(
-        `refresh:${payload.id}:${payload.jti}`,
-      );
-      // New cookies issued: new jti persisted + cookies set.
-      expect(mockRedis.set).toHaveBeenCalledWith(
         `refresh:${user.id}:${FIXED_JTI}`,
-        '1',
-        'EX',
-        REFRESH_TTL_SECONDS,
+        String(REFRESH_TTL_SECONDS),
       );
       expect(res.cookie).toHaveBeenCalledTimes(2);
     });
 
     it('throws UnauthorizedException and issues nothing when the key is missing', async () => {
-      mockRedis.get.mockResolvedValue(null);
+      mockRedis.getClient.mockReturnValue(mockClient);
+      mockClient.eval.mockResolvedValue([0]);
 
       await expect(
         service.rotateAuthCookies(res as unknown as Response, payload, user),
       ).rejects.toBeInstanceOf(UnauthorizedException);
 
-      expect(mockRedis.del).not.toHaveBeenCalled();
-      expect(mockRedis.set).not.toHaveBeenCalled();
       expect(res.cookie).not.toHaveBeenCalled();
     });
   });
 
   describe('setAuthCookies', () => {
-    it('sets the access_token cookie with httpOnly, lax and 15m maxAge', () => {
+    it('sets the access_token cookie with httpOnly, strict and 15m maxAge', () => {
       service.setAuthCookies(res as unknown as Response, 'a', 'r');
 
       expect(res.cookie).toHaveBeenCalledWith('access_token', 'a', {
         httpOnly: true,
         secure: false,
-        sameSite: 'lax',
+        sameSite: 'strict',
         domain: 'localhost',
         maxAge: ACCESS_MAX_AGE_MS,
       });
@@ -176,7 +172,7 @@ describe('TokenService', () => {
       expect(res.cookie).toHaveBeenCalledWith('refresh_token', 'r', {
         httpOnly: true,
         secure: false,
-        sameSite: 'lax',
+        sameSite: 'strict',
         domain: 'localhost',
         path: REFRESH_COOKIE_PATH,
         maxAge: REFRESH_MAX_AGE_MS,

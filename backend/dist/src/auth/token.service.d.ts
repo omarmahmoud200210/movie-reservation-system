@@ -12,6 +12,7 @@ interface AccessPayload {
     name: string;
     email: string;
     role: string;
+    ver: number;
 }
 interface RefreshPayload {
     sub: number;
@@ -29,6 +30,9 @@ export declare class TokenService {
         id: number;
         jti: string;
     }, user: AuthUser): Promise<void>;
+    private accessVersionKey;
+    incrementAccessVersion(userId: number): Promise<void>;
+    getAccessVersion(userId: number): Promise<number>;
     signLinkState(userId: number): string;
     verifyLinkState(token: string | undefined): {
         id: number;

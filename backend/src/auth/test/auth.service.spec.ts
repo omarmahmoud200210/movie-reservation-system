@@ -11,6 +11,7 @@ import { AuthService } from '../auth.service';
 import { AuthRepository } from '../auth.repository';
 import { OtpService } from '../otp.service';
 import { MailerService } from '../../mailer/mailer.service';
+import { AuditService } from '../../common/services/audit.service';
 import * as bcrypt from 'bcrypt';
 
 const mockRepo = {
@@ -32,6 +33,7 @@ jest.mock('bcrypt', () => ({
 
 const mockOtp = { issue: jest.fn(), verify: jest.fn() };
 const mockMailer = { sendOtpEmail: jest.fn() };
+const mockAudit = { record: jest.fn() };
 const mockBcrypt = bcrypt as jest.Mocked<typeof bcrypt>;
 
 describe('AuthService', () => {
@@ -46,6 +48,7 @@ describe('AuthService', () => {
         { provide: AuthRepository, useValue: mockRepo },
         { provide: OtpService, useValue: mockOtp },
         { provide: MailerService, useValue: mockMailer },
+        { provide: AuditService, useValue: mockAudit },
       ],
     }).compile();
 
@@ -77,7 +80,7 @@ describe('AuthService', () => {
 
       const result = await service.register(registerDto);
 
-      expect(result).toEqual({ message: 'Verification code sent' });
+      expect(result).toEqual({ message: 'If eligible, a verification code was sent' });
       expect(mockOtp.issue).toHaveBeenCalledWith(user.email);
       expect(mockMailer.sendOtpEmail).toHaveBeenCalledWith(
         user.email,
@@ -88,9 +91,9 @@ describe('AuthService', () => {
     it('If User Already Exist', async () => {
       mockRepo.findByEmail.mockResolvedValue(user);
 
-      await expect(service.register(registerDto)).rejects.toThrow(
-        ConflictException,
-      );
+      const result = await service.register(registerDto);
+
+      expect(result).toEqual({ message: 'If eligible, a verification code was sent' });
       expect(mockRepo.createUser).not.toHaveBeenCalled();
       expect(mockOtp.issue).not.toHaveBeenCalled();
       expect(mockMailer.sendOtpEmail).not.toHaveBeenCalled();

@@ -21,6 +21,7 @@ const mockTokenService = {
   rotateAuthCookies: jest.fn(),
   clearAuthCookies: jest.fn(),
   verifyLinkState: jest.fn(),
+  revokeAllSessions: jest.fn(),
 };
 
 const res = {} as Response;
@@ -225,10 +226,11 @@ describe('AuthController', () => {
   });
 
   describe('Logout', () => {
-    it('should clear cookies and return a message', () => {
-      const result = controller.logout(res);
+    it('should revoke sessions, clear cookies, and return a message', async () => {
+      const result = await controller.logout(user, res);
 
       expect(result).toEqual({ message: 'Logged out' });
+      expect(mockTokenService.revokeAllSessions).toHaveBeenCalledWith(user.id);
       expect(mockTokenService.clearAuthCookies).toHaveBeenCalledWith(res);
     });
   });

@@ -8,10 +8,9 @@ export declare class MoviesController {
     }>;
     detail(id: number): Promise<{
         name: string;
-        id: number;
         createdAt: Date;
         updatedAt: Date;
-        status: import("@prisma/client").$Enums.MovieStatus;
+        id: number;
         description: string;
         duration: number;
         posterImgUrl: string;
@@ -19,5 +18,6 @@ export declare class MoviesController {
         rating: number;
         language: string;
         genre: string;
+        status: import("@prisma/client").$Enums.MovieStatus;
     }>;
 }

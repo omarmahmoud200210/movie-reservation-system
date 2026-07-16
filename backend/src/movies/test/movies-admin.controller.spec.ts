@@ -4,6 +4,7 @@ import { MoviesService } from '../movies.service';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { ROLES_KEY } from '../../common/decorators/roles.decorator';
+import { AuditService } from '../../common/services/audit.service';
 
 const mockService = {
   createMovie: jest.fn(),
@@ -13,6 +14,12 @@ const mockService = {
   deleteMovie: jest.fn(),
   listAllForAdmin: jest.fn(),
 };
+
+const mockAuditService = {
+  record: jest.fn(),
+};
+
+const user = { id: 1, email: 'admin@test.com', name: 'Admin', role: 'ADMIN' };
 
 // Key Nest uses to store @UseGuards metadata.
 const GUARDS_METADATA = '__guards__';
@@ -25,7 +32,10 @@ describe('MoviesAdminController', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [MoviesAdminController],
-      providers: [{ provide: MoviesService, useValue: mockService }],
+      providers: [
+        { provide: MoviesService, useValue: mockService },
+        { provide: AuditService, useValue: mockAuditService },
+      ],
     }).compile();
 
     controller = module.get<MoviesAdminController>(MoviesAdminController);
@@ -36,42 +46,47 @@ describe('MoviesAdminController', () => {
       const dto = { name: 'Inception' } as never;
       mockService.createMovie.mockResolvedValue({ id: 1 });
 
-      await controller.create(dto);
+      await controller.create(dto, user);
 
       expect(mockService.createMovie).toHaveBeenCalledWith(dto);
+      expect(mockAuditService.record).toHaveBeenCalled();
     });
 
     it('update -> moviesService.updateMovie with id + dto', async () => {
       const dto = { name: 'New' } as never;
       mockService.updateMovie.mockResolvedValue({ id: 1 });
 
-      await controller.update(1, dto);
+      await controller.update(1, dto, user);
 
       expect(mockService.updateMovie).toHaveBeenCalledWith(1, dto);
+      expect(mockAuditService.record).toHaveBeenCalled();
     });
 
     it('publish -> moviesService.publish', async () => {
       mockService.publish.mockResolvedValue({ id: 1 });
 
-      await controller.publish(1);
+      await controller.publish(1, user);
 
       expect(mockService.publish).toHaveBeenCalledWith(1);
+      expect(mockAuditService.record).toHaveBeenCalled();
     });
 
     it('unpublish -> moviesService.unpublish', async () => {
       mockService.unpublish.mockResolvedValue({ id: 1 });
 
-      await controller.unpublish(1);
+      await controller.unpublish(1, user);
 
       expect(mockService.unpublish).toHaveBeenCalledWith(1);
+      expect(mockAuditService.record).toHaveBeenCalled();
     });
 
     it('remove -> moviesService.deleteMovie', async () => {
       mockService.deleteMovie.mockResolvedValue({ id: 1 });
 
-      await controller.remove(1);
+      await controller.remove(1, user);
 
       expect(mockService.deleteMovie).toHaveBeenCalledWith(1);
+      expect(mockAuditService.record).toHaveBeenCalled();
     });
 
     it('listAll -> moviesService.listAllForAdmin', async () => {

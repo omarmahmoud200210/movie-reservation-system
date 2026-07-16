@@ -17,12 +17,12 @@ export declare class ScreeningsRepository {
     hasReservations(screeningId: number): Promise<boolean>;
     findOverlapping(hallId: number, start: Date, end: Date, excludeId?: number): Promise<Screening[]>;
     findFutureScheduledByMovie(movieId: number, now: Date): Prisma.PrismaPromise<{
+        id: number;
         hall: {
             name: string;
-            id: number;
             capacity: number;
+            id: number;
         };
-        id: number;
         startTime: Date;
         price: number;
     }[]>;

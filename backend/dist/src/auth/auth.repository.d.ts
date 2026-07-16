@@ -13,5 +13,5 @@ export declare class AuthRepository {
         googleId: string;
     }): Promise<User>;
     setGoogleId(userId: number, googleId: string): Promise<User>;
-    markEmailVerified(id: number): Promise<User>;
+    markEmailVerified(id: number): Promise<Omit<User, 'password'>>;
 }

@@ -2,9 +2,11 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { HoldExpiryCron } from '../hold-expiry.cron';
 import { ReservationsService } from '../../reservations/reservations.service';
 import { PaymentsService } from '../../payments/payments.service';
+import { AuditService } from '../../common/services/audit.service';
 
 const mockReservationsService = { expireHolds: jest.fn() };
 const mockPaymentsService = { reconcileTimedOutPayments: jest.fn() };
+const mockAudit = { record: jest.fn() };
 
 describe('HoldExpiryCron', () => {
   let cron: HoldExpiryCron;
@@ -17,6 +19,7 @@ describe('HoldExpiryCron', () => {
         HoldExpiryCron,
         { provide: ReservationsService, useValue: mockReservationsService },
         { provide: PaymentsService, useValue: mockPaymentsService },
+        { provide: AuditService, useValue: mockAudit },
       ],
     }).compile();
 

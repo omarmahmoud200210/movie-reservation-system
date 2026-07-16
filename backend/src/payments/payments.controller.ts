@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -37,6 +38,10 @@ export class PaymentsController {
 
   @Post('webhook')
   handleWebhook(@Req() req: RawBodyRequest<Request>) {
+    const contentType = req.headers['content-type'] ?? '';
+    if (!contentType.includes('application/json')) {
+      throw new BadRequestException('Invalid content type');
+    }
     return this.paymentsService.handleWebhookEvent(
       req.rawBody as Buffer,
       req.headers['stripe-signature'] as string,

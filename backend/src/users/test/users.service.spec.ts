@@ -13,6 +13,7 @@ import { OtpService } from '../../auth/otp.service';
 import { MailerService } from '../../mailer/mailer.service';
 import { AuthService } from '../../auth/auth.service';
 import { TokenService } from '../../auth/token.service';
+import { AuditService } from '../../common/services/audit.service';
 
 jest.mock('bcrypt', () => ({
   hash: jest.fn(),
@@ -30,9 +31,11 @@ const mockRedis = { get: jest.fn(), set: jest.fn(), del: jest.fn() };
 const mockOtp = { issue: jest.fn(), verify: jest.fn() };
 const mockMailer = { sendOtpEmail: jest.fn() };
 const mockAuthService = { getAuthUser: jest.fn() };
+const mockAudit = { record: jest.fn() };
 const mockTokenService = {
   revokeAllSessions: jest.fn(),
   issueAuthCookies: jest.fn(),
+  incrementAccessVersion: jest.fn(),
 };
 const mockBcrypt = bcrypt as jest.Mocked<typeof bcrypt>;
 
@@ -52,6 +55,7 @@ describe('UsersService', () => {
         { provide: MailerService, useValue: mockMailer },
         { provide: AuthService, useValue: mockAuthService },
         { provide: TokenService, useValue: mockTokenService },
+        { provide: AuditService, useValue: mockAudit },
       ],
     }).compile();
 

@@ -48,19 +48,23 @@ const bcrypt = __importStar(require("bcrypt"));
 const auth_repository_1 = require("./auth.repository");
 const otp_service_1 = require("./otp.service");
 const mailer_service_1 = require("../mailer/mailer.service");
+const audit_service_1 = require("../common/services/audit.service");
 let AuthService = class AuthService {
     repo;
     otp;
     mailer;
-    constructor(repo, otp, mailer) {
+    audit;
+    constructor(repo, otp, mailer, audit) {
         this.repo = repo;
         this.otp = otp;
         this.mailer = mailer;
+        this.audit = audit;
     }
     async register(dto) {
         const existing = await this.repo.findByEmail(dto.email);
-        if (existing)
-            throw new common_1.ConflictException('Email already registered');
+        if (existing) {
+            return { message: 'If eligible, a verification code was sent' };
+        }
         const hash = await bcrypt.hash(dto.password, 10);
         const user = await this.repo.createUser({
             name: dto.name,
@@ -69,7 +73,8 @@ let AuthService = class AuthService {
         });
         const code = await this.otp.issue(user.email);
         await this.mailer.sendOtpEmail(user.email, code);
-        return { message: 'Verification code sent' };
+        await this.audit.record({ action: 'user.registered', targetType: 'user', targetId: user.id });
+        return { message: 'If eligible, a verification code was sent' };
     }
     async verifyOtp(dto) {
         const user = await this.repo.findByEmail(dto.email);
@@ -89,6 +94,7 @@ let AuthService = class AuthService {
         }
         const matches = await bcrypt.compare(password, user.password);
         if (!matches) {
+            await this.audit.record({ action: 'login.failed', actorId: user.id, metadata: { reason: 'wrong_password' } });
             throw new common_1.UnauthorizedException('Invalid email or password');
         }
         if (!user.emailVerified) {
@@ -136,6 +142,7 @@ exports.AuthService = AuthService = __decorate([
     (0, common_1.Injectable)(),
     __metadata("design:paramtypes", [auth_repository_1.AuthRepository,
         otp_service_1.OtpService,
-        mailer_service_1.MailerService])
+        mailer_service_1.MailerService,
+        audit_service_1.AuditService])
 ], AuthService);
 //# sourceMappingURL=auth.service.js.map

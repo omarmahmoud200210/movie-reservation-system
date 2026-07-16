@@ -33,12 +33,12 @@ export declare class ScreeningsService {
     deleteScreening(id: number): Promise<Screening>;
     getScreeningDetail(id: number): Promise<ScreeningWithMovieHall>;
     getMovieScreenings(movieId: number): Promise<{
+        id: number;
         hall: {
             name: string;
-            id: number;
             capacity: number;
+            id: number;
         };
-        id: number;
         startTime: Date;
         price: number;
     }[]>;

@@ -58,7 +58,8 @@ let AuthController = class AuthController {
         await this.tokenService.rotateAuthCookies(res, { id: user.id, jti: user.jti }, fresh);
         return { message: 'Token refreshed' };
     }
-    logout(res) {
+    async logout(user, res) {
+        await this.tokenService.revokeAllSessions(user.id);
         this.tokenService.clearAuthCookies(res);
         return { message: 'Logged out' };
     }
@@ -152,10 +153,11 @@ __decorate([
     (0, common_1.Post)('logout'),
     (0, common_1.HttpCode)(common_1.HttpStatus.OK),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
-    __param(0, (0, common_1.Res)({ passthrough: true })),
+    __param(0, (0, current_user_decorator_1.CurrentUser)()),
+    __param(1, (0, common_1.Res)({ passthrough: true })),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object]),
-    __metadata("design:returntype", void 0)
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", Promise)
 ], AuthController.prototype, "logout", null);
 __decorate([
     (0, common_1.Get)('me'),

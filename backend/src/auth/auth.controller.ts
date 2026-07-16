@@ -93,7 +93,11 @@ export class AuthController {
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
-  logout(@Res({ passthrough: true }) res: Response) {
+  async logout(
+    @CurrentUser() user: AuthUser,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    await this.tokenService.revokeAllSessions(user.id);
     this.tokenService.clearAuthCookies(res);
     return { message: 'Logged out' };
   }

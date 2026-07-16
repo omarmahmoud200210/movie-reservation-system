@@ -587,9 +587,8 @@ src/
 8. **Payment** — Stripe checkout, webhook handler, refund logic ✅
 9. **Observability** — Prometheus metrics, Grafana dashboards ✅
 10. **Load Testing** — Artillery scenarios, tune under Grafana observation ✅
-
-12. **Security hardening** — HTTPS, input validation, JWT in cookies
-13. **Integration Wiring** — walk every `DEFERRED(phase-N)` marker across all
+11. **Security hardening** — HTTPS, input validation, JWT in cookies
+12. **Integration Wiring** — walk every `DEFERRED ✅(phase-N)` marker across all
     modules and connect each seam to the module that now exists. Earlier phases
     intentionally leave greppable `// DEFERRED(phase-N): …` comments (no stub
     code) exactly where a not-yet-built module will plug in; this phase is the
@@ -601,7 +600,7 @@ src/
     - Reservations `POST` → rate limiting (phase 8)
     - Reservations / Gateway → `HELD → CONFIRMED` / `BOOKED` on payment (phase 9)
     - Cron → payment reconciliation job (finds `timed_out` payments, reconciles with Stripe) (phase 9)
-    - Gateway `getScreeningSummary` → atomic Redis counters if load testing warrants (phase 11)
+    - Gateway `getScreeningSummary` → atomic Redis counters if load testing warrants (phase 11) 
 
 ## Notes for later
 

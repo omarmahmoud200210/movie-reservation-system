@@ -78,6 +78,16 @@ const histograms = [
   }),
 ];
 
+const responseSizeHistograms = [
+  makeHistogramProvider({
+    name: 'http_response_size_bytes',
+    help: 'HTTP response body size in bytes',
+    labelNames: ['method', 'route', 'status_code'],
+    buckets: [100, 500, 1460, 5000, 10000, 50000, 100000, 500000],
+  }),
+];
+
+
 @Global()
 @Module({
   imports: [
@@ -86,7 +96,7 @@ const histograms = [
       defaultMetrics: { enabled: true },
     }),
   ],
-  providers: [...counters, ...gauges, ...histograms],
-  exports: [...counters, ...gauges, ...histograms],
+  providers: [...counters, ...gauges, ...histograms, ...responseSizeHistograms],
+  exports: [...counters, ...gauges, ...histograms, ...responseSizeHistograms],
 })
 export class MetricsModule {}

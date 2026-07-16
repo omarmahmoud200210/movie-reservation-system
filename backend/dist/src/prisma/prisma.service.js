@@ -17,7 +17,16 @@ const pg_1 = require("pg");
 let PrismaService = class PrismaService extends client_1.PrismaClient {
     pool;
     constructor() {
-        const pool = new pg_1.Pool({ connectionString: process.env.DATABASE_URL });
+        const pool = new pg_1.Pool({
+            connectionString: process.env.DATABASE_URL,
+            max: 100,
+            min: 10,
+            idleTimeoutMillis: 30000,
+            connectionTimeoutMillis: 10000,
+            ...(process.env.NODE_ENV === 'production' && {
+                ssl: { rejectUnauthorized: true },
+            }),
+        });
         const adapter = new adapter_pg_1.PrismaPg(pool);
         super({ adapter });
         this.pool = pool;

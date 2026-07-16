@@ -6,47 +6,47 @@ export declare class HallsAdminController {
     create(dto: CreateHallDto): Promise<{
         seats: {
             number: string;
-            id: number;
             createdAt: Date;
             updatedAt: Date;
+            id: number;
             hallId: number;
             row: string;
         }[];
     } & {
         name: string;
-        id: number;
+        capacity: number;
         createdAt: Date;
         updatedAt: Date;
-        capacity: number;
+        id: number;
     }>;
     list(): Promise<{
         name: string;
-        id: number;
+        capacity: number;
         createdAt: Date;
         updatedAt: Date;
-        capacity: number;
+        id: number;
     }[]>;
     getOne(id: number): Promise<{
         seats: {
             number: string;
-            id: number;
             createdAt: Date;
             updatedAt: Date;
+            id: number;
             hallId: number;
             row: string;
         }[];
     } & {
         name: string;
-        id: number;
+        capacity: number;
         createdAt: Date;
         updatedAt: Date;
-        capacity: number;
+        id: number;
     }>;
     remove(id: number): Promise<{
         name: string;
-        id: number;
+        capacity: number;
         createdAt: Date;
         updatedAt: Date;
-        capacity: number;
+        id: number;
     }>;
 }

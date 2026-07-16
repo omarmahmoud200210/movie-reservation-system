@@ -1,15 +1,17 @@
+import { AuditService } from '../common/services/audit.service';
+import type { AuthUser } from '../auth/token.service';
 import { CreateMovieDto } from './dto/create-movie.dto';
 import { UpdateMovieDto } from './dto/update-movie.dto';
 import { MoviesService } from './movies.service';
 export declare class MoviesAdminController {
     private readonly moviesService;
-    constructor(moviesService: MoviesService);
-    create(dto: CreateMovieDto): Promise<{
+    private readonly audit;
+    constructor(moviesService: MoviesService, audit: AuditService);
+    create(dto: CreateMovieDto, user: AuthUser): Promise<{
         name: string;
-        id: number;
         createdAt: Date;
         updatedAt: Date;
-        status: import("@prisma/client").$Enums.MovieStatus;
+        id: number;
         description: string;
         duration: number;
         posterImgUrl: string;
@@ -17,13 +19,13 @@ export declare class MoviesAdminController {
         rating: number;
         language: string;
         genre: string;
+        status: import("@prisma/client").$Enums.MovieStatus;
     }>;
-    update(id: number, dto: UpdateMovieDto): Promise<{
+    update(id: number, dto: UpdateMovieDto, user: AuthUser): Promise<{
         name: string;
-        id: number;
         createdAt: Date;
         updatedAt: Date;
-        status: import("@prisma/client").$Enums.MovieStatus;
+        id: number;
         description: string;
         duration: number;
         posterImgUrl: string;
@@ -31,13 +33,13 @@ export declare class MoviesAdminController {
         rating: number;
         language: string;
         genre: string;
+        status: import("@prisma/client").$Enums.MovieStatus;
     }>;
-    publish(id: number): Promise<{
+    publish(id: number, user: AuthUser): Promise<{
         name: string;
-        id: number;
         createdAt: Date;
         updatedAt: Date;
-        status: import("@prisma/client").$Enums.MovieStatus;
+        id: number;
         description: string;
         duration: number;
         posterImgUrl: string;
@@ -45,13 +47,13 @@ export declare class MoviesAdminController {
         rating: number;
         language: string;
         genre: string;
+        status: import("@prisma/client").$Enums.MovieStatus;
     }>;
-    unpublish(id: number): Promise<{
+    unpublish(id: number, user: AuthUser): Promise<{
         name: string;
-        id: number;
         createdAt: Date;
         updatedAt: Date;
-        status: import("@prisma/client").$Enums.MovieStatus;
+        id: number;
         description: string;
         duration: number;
         posterImgUrl: string;
@@ -59,13 +61,13 @@ export declare class MoviesAdminController {
         rating: number;
         language: string;
         genre: string;
+        status: import("@prisma/client").$Enums.MovieStatus;
     }>;
-    remove(id: number): Promise<{
+    remove(id: number, user: AuthUser): Promise<{
         name: string;
-        id: number;
         createdAt: Date;
         updatedAt: Date;
-        status: import("@prisma/client").$Enums.MovieStatus;
+        id: number;
         description: string;
         duration: number;
         posterImgUrl: string;
@@ -73,13 +75,13 @@ export declare class MoviesAdminController {
         rating: number;
         language: string;
         genre: string;
+        status: import("@prisma/client").$Enums.MovieStatus;
     }>;
     listAll(): Promise<{
         name: string;
-        id: number;
         createdAt: Date;
         updatedAt: Date;
-        status: import("@prisma/client").$Enums.MovieStatus;
+        id: number;
         description: string;
         duration: number;
         posterImgUrl: string;
@@ -87,5 +89,6 @@ export declare class MoviesAdminController {
         rating: number;
         language: string;
         genre: string;
+        status: import("@prisma/client").$Enums.MovieStatus;
     }[]>;
 }
