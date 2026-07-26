@@ -6,6 +6,14 @@ import { ReservationsService } from './reservations.service';
 import { ReservationsRepository } from './reservations.repository';
 import { ReservationCacheListener } from './listeners/reservation-cache.listener';
 import { ReservationMetricsListener } from './listeners/reservation-metrics.listener';
+import {
+  CONCURRENCY_LIMIT,
+  ConcurrencyGuard,
+} from '../common/guards/concurrency.guard';
+import {
+  RESERVATION_BREAKER_OPTIONS,
+  ReservationBreaker,
+} from './reservation-breaker.service';
 
 /**
  * Reservations (HTTP) — hold, cancel, and list a user's seat reservations.
@@ -22,6 +30,17 @@ import { ReservationMetricsListener } from './listeners/reservation-metrics.list
     ReservationsRepository,
     ReservationCacheListener,
     ReservationMetricsListener,
+    ConcurrencyGuard,
+    { provide: CONCURRENCY_LIMIT, useValue: 4 },
+    ReservationBreaker,
+    {
+      provide: RESERVATION_BREAKER_OPTIONS,
+      useValue: {
+        errorThresholdPercentage: 50,
+        resetTimeout: 30_000,
+        volumeThreshold: 10,
+      },
+    },
   ],
   exports: [ReservationsService],
 })

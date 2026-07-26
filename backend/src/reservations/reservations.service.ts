@@ -10,7 +10,9 @@ import {
 import { Reservation, ReservationStatus, ScreenStatus } from '@prisma/client';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ReservationsRepository } from './reservations.repository';
+import { ReservationBreaker } from './reservation-breaker.service';
 import { ScreeningsRepository } from '../screenings/screenings.repository';
+import { ConcurrencyGuard } from '../common/guards/concurrency.guard';
 import PaymentAbuseService from '../redis/payment-abuse.service';
 import { PaymentsService } from '../payments/payments.service';
 import { CreateReservationDto } from './dto/create-reservation.dto';
@@ -27,9 +29,11 @@ const HOLD_MINUTES = 10;
 export class ReservationsService {
   constructor(
     private readonly reservationsRepo: ReservationsRepository,
+    private readonly reservationBreaker: ReservationBreaker,
     private readonly screeningsRepo: ScreeningsRepository,
     private readonly events: EventEmitter2,
     private readonly paymentAbuse: PaymentAbuseService,
+    private readonly concurrency: ConcurrencyGuard,
     @Inject(forwardRef(() => PaymentsService))
     private readonly paymentsService: PaymentsService,
   ) {}
@@ -58,13 +62,19 @@ export class ReservationsService {
 
     const heldUntil = new Date(Date.now() + HOLD_MINUTES * 60_000);
 
-    const reservation = await this.reservationsRepo.holdSeat({
-      userId,
-      screeningId: dto.screeningId,
-      hallId: screening.hallId,
-      seatId: dto.seatId,
-      heldUntil,
-    });
+    const release = await this.concurrency.acquire();
+    let reservation: Reservation;
+    try {
+      reservation = await this.reservationBreaker.holdSeat({
+        userId,
+        screeningId: dto.screeningId,
+        hallId: screening.hallId,
+        seatId: dto.seatId,
+        heldUntil,
+      });
+    } finally {
+      release();
+    }
 
     this.events.emit(RESERVATION_CREATED, {
       screeningId: dto.screeningId,

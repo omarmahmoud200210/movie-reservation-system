@@ -12,13 +12,18 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.HallsService = void 0;
 const common_1 = require("@nestjs/common");
 const halls_repository_1 = require("./halls.repository");
+const screenings_cache_1 = require("./screenings.cache");
 let HallsService = class HallsService {
     hallsRepo;
-    constructor(hallsRepo) {
+    screeningsCache;
+    constructor(hallsRepo, screeningsCache) {
         this.hallsRepo = hallsRepo;
+        this.screeningsCache = screeningsCache;
     }
-    createHall(dto) {
-        return this.hallsRepo.createHallWithSeats(dto);
+    async createHall(dto) {
+        const hall = await this.hallsRepo.createHallWithSeats(dto);
+        await this.screeningsCache.delHalls();
+        return hall;
     }
     async getHall(id) {
         const hall = await this.hallsRepo.findHallWithSeats(id);
@@ -27,8 +32,14 @@ let HallsService = class HallsService {
         }
         return hall;
     }
-    listHalls() {
-        return this.hallsRepo.listHalls();
+    async listHalls() {
+        const cached = await this.screeningsCache.getHalls();
+        if (cached) {
+            return cached;
+        }
+        const halls = await this.hallsRepo.listHalls();
+        await this.screeningsCache.setHalls(halls);
+        return halls;
     }
     async deleteHall(id) {
         const hall = await this.hallsRepo.findHallWithSeats(id);
@@ -38,12 +49,15 @@ let HallsService = class HallsService {
         if (await this.hallsRepo.hasReservations(id)) {
             throw new common_1.ConflictException('Cannot delete a hall with existing reservations');
         }
-        return this.hallsRepo.deleteHall(id);
+        const deleted = await this.hallsRepo.deleteHall(id);
+        await this.screeningsCache.delHalls();
+        return deleted;
     }
 };
 exports.HallsService = HallsService;
 exports.HallsService = HallsService = __decorate([
     (0, common_1.Injectable)(),
-    __metadata("design:paramtypes", [halls_repository_1.HallsRepository])
+    __metadata("design:paramtypes", [halls_repository_1.HallsRepository,
+        screenings_cache_1.ScreeningsCache])
 ], HallsService);
 //# sourceMappingURL=halls.service.js.map

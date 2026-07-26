@@ -1,0 +1,327 @@
+{
+  "aggregate": {
+    "counters": {
+      "vusers.created_by_name.Race for the same seat": 100,
+      "vusers.created": 100,
+      "http.requests": 100,
+      "http.codes.201": 1,
+      "http.responses": 100,
+      "http.downloaded_bytes": 9884,
+      "plugins.expect.ok": 100,
+      "plugins.expect.ok.statusCode": 100,
+      "plugins.metrics-by-endpoint./api/v1/reservations.codes.201": 1,
+      "vusers.failed": 0,
+      "vusers.completed": 100,
+      "http.codes.409": 99,
+      "plugins.metrics-by-endpoint./api/v1/reservations.codes.409": 99
+    },
+    "rates": {
+      "http.request_rate": 47
+    },
+    "firstCounterAt": 1784911812172,
+    "firstHistogramAt": 1784911813187,
+    "lastCounterAt": 1784911814615,
+    "lastHistogramAt": 1784911814615,
+    "firstMetricAt": 1784911812172,
+    "lastMetricAt": 1784911814615,
+    "period": 1784911810000,
+    "summaries": {
+      "http.response_time": {
+        "min": 16,
+        "max": 910,
+        "count": 100,
+        "mean": 381.8,
+        "p50": 354.3,
+        "median": 354.3,
+        "p75": 632.8,
+        "p90": 820.7,
+        "p95": 871.5,
+        "p99": 907,
+        "p999": 907
+      },
+      "http.response_time.2xx": {
+        "min": 725,
+        "max": 725,
+        "count": 1,
+        "mean": 725,
+        "p50": 727.9,
+        "median": 727.9,
+        "p75": 727.9,
+        "p90": 727.9,
+        "p95": 727.9,
+        "p99": 727.9,
+        "p999": 727.9
+      },
+      "plugins.metrics-by-endpoint.response_time./api/v1/reservations": {
+        "min": 16,
+        "max": 910,
+        "count": 100,
+        "mean": 381.8,
+        "p50": 354.3,
+        "median": 354.3,
+        "p75": 632.8,
+        "p90": 820.7,
+        "p95": 871.5,
+        "p99": 907,
+        "p999": 907
+      },
+      "vusers.session_length": {
+        "min": 997.5,
+        "max": 2404.9,
+        "count": 100,
+        "mean": 1306.7,
+        "p50": 1274.3,
+        "median": 1274.3,
+        "p75": 1326.4,
+        "p90": 1353.1,
+        "p95": 1408.4,
+        "p99": 2416.8,
+        "p999": 2416.8
+      },
+      "http.response_time.4xx": {
+        "min": 16,
+        "max": 910,
+        "count": 99,
+        "mean": 378.4,
+        "p50": 354.3,
+        "median": 354.3,
+        "p75": 632.8,
+        "p90": 820.7,
+        "p95": 871.5,
+        "p99": 907,
+        "p999": 907
+      }
+    },
+    "histograms": {
+      "http.response_time": {
+        "min": 16,
+        "max": 910,
+        "count": 100,
+        "mean": 381.8,
+        "p50": 354.3,
+        "median": 354.3,
+        "p75": 632.8,
+        "p90": 820.7,
+        "p95": 871.5,
+        "p99": 907,
+        "p999": 907
+      },
+      "http.response_time.2xx": {
+        "min": 725,
+        "max": 725,
+        "count": 1,
+        "mean": 725,
+        "p50": 727.9,
+        "median": 727.9,
+        "p75": 727.9,
+        "p90": 727.9,
+        "p95": 727.9,
+        "p99": 727.9,
+        "p999": 727.9
+      },
+      "plugins.metrics-by-endpoint.response_time./api/v1/reservations": {
+        "min": 16,
+        "max": 910,
+        "count": 100,
+        "mean": 381.8,
+        "p50": 354.3,
+        "median": 354.3,
+        "p75": 632.8,
+        "p90": 820.7,
+        "p95": 871.5,
+        "p99": 907,
+        "p999": 907
+      },
+      "vusers.session_length": {
+        "min": 997.5,
+        "max": 2404.9,
+        "count": 100,
+        "mean": 1306.7,
+        "p50": 1274.3,
+        "median": 1274.3,
+        "p75": 1326.4,
+        "p90": 1353.1,
+        "p95": 1408.4,
+        "p99": 2416.8,
+        "p999": 2416.8
+      },
+      "http.response_time.4xx": {
+        "min": 16,
+        "max": 910,
+        "count": 99,
+        "mean": 378.4,
+        "p50": 354.3,
+        "median": 354.3,
+        "p75": 632.8,
+        "p90": 820.7,
+        "p95": 871.5,
+        "p99": 907,
+        "p999": 907
+      }
+    }
+  },
+  "intermediate": [
+    {
+      "counters": {
+        "vusers.created_by_name.Race for the same seat": 100,
+        "vusers.created": 100,
+        "http.requests": 100,
+        "http.codes.201": 1,
+        "http.responses": 100,
+        "http.downloaded_bytes": 9884,
+        "plugins.expect.ok": 100,
+        "plugins.expect.ok.statusCode": 100,
+        "plugins.metrics-by-endpoint./api/v1/reservations.codes.201": 1,
+        "vusers.failed": 0,
+        "vusers.completed": 100,
+        "http.codes.409": 99,
+        "plugins.metrics-by-endpoint./api/v1/reservations.codes.409": 99
+      },
+      "rates": {
+        "http.request_rate": 47
+      },
+      "http.request_rate": null,
+      "firstCounterAt": 1784911812172,
+      "firstHistogramAt": 1784911813187,
+      "lastCounterAt": 1784911814615,
+      "lastHistogramAt": 1784911814615,
+      "firstMetricAt": 1784911812172,
+      "lastMetricAt": 1784911814615,
+      "period": "1784911810000",
+      "summaries": {
+        "http.response_time": {
+          "min": 16,
+          "max": 910,
+          "count": 100,
+          "mean": 381.8,
+          "p50": 354.3,
+          "median": 354.3,
+          "p75": 632.8,
+          "p90": 820.7,
+          "p95": 871.5,
+          "p99": 907,
+          "p999": 907
+        },
+        "http.response_time.2xx": {
+          "min": 725,
+          "max": 725,
+          "count": 1,
+          "mean": 725,
+          "p50": 727.9,
+          "median": 727.9,
+          "p75": 727.9,
+          "p90": 727.9,
+          "p95": 727.9,
+          "p99": 727.9,
+          "p999": 727.9
+        },
+        "plugins.metrics-by-endpoint.response_time./api/v1/reservations": {
+          "min": 16,
+          "max": 910,
+          "count": 100,
+          "mean": 381.8,
+          "p50": 354.3,
+          "median": 354.3,
+          "p75": 632.8,
+          "p90": 820.7,
+          "p95": 871.5,
+          "p99": 907,
+          "p999": 907
+        },
+        "vusers.session_length": {
+          "min": 997.5,
+          "max": 2404.9,
+          "count": 100,
+          "mean": 1306.7,
+          "p50": 1274.3,
+          "median": 1274.3,
+          "p75": 1326.4,
+          "p90": 1353.1,
+          "p95": 1408.4,
+          "p99": 2416.8,
+          "p999": 2416.8
+        },
+        "http.response_time.4xx": {
+          "min": 16,
+          "max": 910,
+          "count": 99,
+          "mean": 378.4,
+          "p50": 354.3,
+          "median": 354.3,
+          "p75": 632.8,
+          "p90": 820.7,
+          "p95": 871.5,
+          "p99": 907,
+          "p999": 907
+        }
+      },
+      "histograms": {
+        "http.response_time": {
+          "min": 16,
+          "max": 910,
+          "count": 100,
+          "mean": 381.8,
+          "p50": 354.3,
+          "median": 354.3,
+          "p75": 632.8,
+          "p90": 820.7,
+          "p95": 871.5,
+          "p99": 907,
+          "p999": 907
+        },
+        "http.response_time.2xx": {
+          "min": 725,
+          "max": 725,
+          "count": 1,
+          "mean": 725,
+          "p50": 727.9,
+          "median": 727.9,
+          "p75": 727.9,
+          "p90": 727.9,
+          "p95": 727.9,
+          "p99": 727.9,
+          "p999": 727.9
+        },
+        "plugins.metrics-by-endpoint.response_time./api/v1/reservations": {
+          "min": 16,
+          "max": 910,
+          "count": 100,
+          "mean": 381.8,
+          "p50": 354.3,
+          "median": 354.3,
+          "p75": 632.8,
+          "p90": 820.7,
+          "p95": 871.5,
+          "p99": 907,
+          "p999": 907
+        },
+        "vusers.session_length": {
+          "min": 997.5,
+          "max": 2404.9,
+          "count": 100,
+          "mean": 1306.7,
+          "p50": 1274.3,
+          "median": 1274.3,
+          "p75": 1326.4,
+          "p90": 1353.1,
+          "p95": 1408.4,
+          "p99": 2416.8,
+          "p999": 2416.8
+        },
+        "http.response_time.4xx": {
+          "min": 16,
+          "max": 910,
+          "count": 99,
+          "mean": 378.4,
+          "p50": 354.3,
+          "median": 354.3,
+          "p75": 632.8,
+          "p90": 820.7,
+          "p95": 871.5,
+          "p99": 907,
+          "p999": 907
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Artillery Load Test Report</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #e2e8f0; padding: 24px; }
+    h1 { font-size: 1.8rem; margin-bottom: 8px; color: #f8fafc; }
+    .subtitle { color: #94a3b8; margin-bottom: 32px; font-size: 0.9rem; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 32px; }
+    .card { background: #1e293b; border-radius: 12px; padding: 20px; border: 1px solid #334155; }
+    .card .label { font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }
+    .card .value { font-size: 1.8rem; font-weight: 700; margin-top: 4px; }
+    .card .unit { font-size: 0.8rem; color: #64748b; }
+    .good { color: #4ade80; }
+    .warn { color: #fbbf24; }
+    .bad { color: #f87171; }
+    .chart-container { background: #1e293b; border-radius: 12px; padding: 24px; border: 1px solid #334155; margin-bottom: 24px; }
+    .chart-container h2 { font-size: 1.1rem; margin-bottom: 16px; color: #f1f5f9; }
+    canvas { width: 100% !important; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #334155; }
+    th { color: #94a3b8; font-size: 0.75rem; text-transform: uppercase; }
+    td { color: #e2e8f0; }
+    .status-badge { display: inline-block; padding: 2px 10px; border-radius: 9999px; font-size: 0.8rem; font-weight: 600; }
+    .status-2xx { background: #166534; color: #4ade80; }
+    .status-4xx { background: #713f12; color: #fbbf24; }
+    .status-5xx { background: #7f1d1d; color: #f87171; }
+  </style>
+</head>
+<body>
+  <h1>&#128202; Artillery Load Test Report</h1>
+  <p class="subtitle">Generated at 7/24/2026, 11:41:36 PM &mdash; 21 sample periods</p>
+
+  <div class="cards">
+    <div class="card"><div class="label">Total Requests</div><div class="value">9,090</div></div>
+    <div class="card"><div class="label">Median (p50)</div><div class="value good">228.2<span class="unit"> ms</span></div></div>
+    <div class="card"><div class="label">p95</div><div class="value warn">4316.6<span class="unit"> ms</span></div></div>
+    <div class="card"><div class="label">p99</div><div class="value warn">6569.8<span class="unit"> ms</span></div></div>
+    <div class="card"><div class="label">Max</div><div class="value bad">8005<span class="unit"> ms</span></div></div>
+    <div class="card"><div class="label">Error Rate</div><div class="value bad">4.18<span class="unit"> %</span></div></div>
+  </div>
+
+  <div class="chart-container">
+    <h2>Response Time Over Time</h2>
+    <canvas id="latencyChart"></canvas>
+  </div>
+
+  <div class="chart-container">
+    <h2>Throughput &amp; Errors</h2>
+    <canvas id="rpsChart"></canvas>
+  </div>
+
+  <div class="chart-container">
+    <h2>HTTP Status Code Breakdown</h2>
+    <table>
+      <thead><tr><th>Status</th><th>Count</th><th>Share</th></tr></thead>
+      <tbody><tr><td><span class="status-badge status-2xx">200</span></td><td>7,224</td><td>91.6%</td></tr>
+<tr><td><span class="status-badge status-2xx">201</span></td><td>334</td><td>4.2%</td></tr>
+<tr><td><span class="status-badge status-4xx">429</span></td><td>1</td><td>0.0%</td></tr>
+<tr><td><span class="status-badge status-5xx">500</span></td><td>24</td><td>0.3%</td></tr>
+<tr><td><span class="status-badge status-5xx">503</span></td><td>305</td><td>3.9%</td></tr></tbody>
+    </table>
+  </div>
+
+  <script>
+    var chartDefaults = {
+      responsive: true,
+      interaction: { mode: "index", intersect: false },
+      scales: {
+        x: { ticks: { color: "#64748b" }, grid: { color: "#1e293b" } },
+        y: { ticks: { color: "#64748b" }, grid: { color: "#334155" } }
+      },
+      plugins: { legend: { labels: { color: "#94a3b8" } } }
+    };
+
+    new Chart(document.getElementById("latencyChart"), {
+      type: "line",
+      data: {
+        labels: ["Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date"],
+        datasets: [
+          { label: "p50", data: [5,5,5,6,8.9,29.1,8.9,376.2,788.5,450.4,4316.6,4065.2,2725,6976.1,0,671.9,130.3,194.4,361.5,314.2,153], borderColor: "#4ade80", borderWidth: 2, fill: false, tension: 0.3 },
+          { label: "p95", data: [10.1,19.1,21.1,29.1,87.4,507.8,214.9,3011.6,4231.1,4403.8,6838,6064.7,6569.8,6976.1,0,671.9,788.5,871.5,1525.7,1353.1,699.4], borderColor: "#fbbf24", borderWidth: 2, fill: false, tension: 0.3 },
+          { label: "p99", data: [34.1,24.8,30.9,56.3,141.2,713.5,432.7,4316.6,5272.4,8024.5,7407.5,7865.6,6569.8,6976.1,0,671.9,982.6,2322.1,2671,2566.3,2186.8], borderColor: "#f87171", borderWidth: 2, fill: false, tension: 0.3 }
+        ]
+      },
+      options: Object.assign({}, chartDefaults, { scales: { x: chartDefaults.scales.x, y: Object.assign({}, chartDefaults.scales.y, { title: { display: true, text: "ms", color: "#94a3b8" } }) } })
+    });
+
+    new Chart(document.getElementById("rpsChart"), {
+      type: "bar",
+      data: {
+        labels: ["Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date"],
+        datasets: [
+          { label: "Successful (2xx)", data: [67,228,224,307,445,442,451,453,555,524,222,246,450,5,0,19,685,664,633,663,275], backgroundColor: "#166534", borderRadius: 4 },
+          { label: "Errors", data: [0,0,0,0,0,3,0,8,17,71,12,12,0,0,0,0,28,51,55,53,20], backgroundColor: "#7f1d1d", borderRadius: 4 }
+        ]
+      },
+      options: Object.assign({}, chartDefaults, { scales: { x: Object.assign({}, chartDefaults.scales.x, { stacked: true }), y: Object.assign({}, chartDefaults.scales.y, { stacked: true, title: { display: true, text: "requests", color: "#94a3b8" } }) } })
+    });
+  </script>
+</body>
+</html>

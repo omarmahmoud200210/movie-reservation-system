@@ -29,7 +29,7 @@ let HallsRepository = class HallsRepository {
     createHallWithSeats(input) {
         const { name, rows, seatsPerRow } = input;
         const capacity = rows * seatsPerRow;
-        return this.prisma.$transaction(async (tx) => {
+        return this.prisma.write.$transaction(async (tx) => {
             const hall = await tx.hall.create({ data: { name, capacity } });
             const seats = [];
             for (let r = 0; r < rows; r++) {
@@ -46,22 +46,22 @@ let HallsRepository = class HallsRepository {
         });
     }
     findHallWithSeats(id) {
-        return this.prisma.hall.findUnique({
+        return this.prisma.read.hall.findUnique({
             where: { id },
             include: { seats: { orderBy: [{ row: 'asc' }, { id: 'asc' }] } },
         });
     }
     listHalls() {
-        return this.prisma.hall.findMany({ orderBy: { id: 'asc' } });
+        return this.prisma.read.hall.findMany({ orderBy: { id: 'asc' } });
     }
     findById(id) {
-        return this.prisma.hall.findUnique({ where: { id } });
+        return this.prisma.read.hall.findUnique({ where: { id } });
     }
     deleteHall(id) {
-        return this.prisma.hall.delete({ where: { id } });
+        return this.prisma.write.hall.delete({ where: { id } });
     }
     async hasReservations(hallId) {
-        const reservation = await this.prisma.reservation.findFirst({
+        const reservation = await this.prisma.read.reservation.findFirst({
             where: { screen: { hallId } },
             select: { id: true },
         });

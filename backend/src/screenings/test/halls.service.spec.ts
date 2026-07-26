@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { HallsService } from '../halls.service';
 import { HallsRepository } from '../halls.repository';
+import { ScreeningsCache } from '../screenings.cache';
 
 const mockRepo = {
   createHallWithSeats: jest.fn(),
@@ -9,6 +10,12 @@ const mockRepo = {
   listHalls: jest.fn(),
   deleteHall: jest.fn(),
   hasReservations: jest.fn(),
+};
+
+const mockScreeningsCache = {
+  getHalls: jest.fn(),
+  setHalls: jest.fn(),
+  delHalls: jest.fn(),
 };
 
 const hallWithSeats = {
@@ -31,6 +38,7 @@ describe('HallsService', () => {
       providers: [
         HallsService,
         { provide: HallsRepository, useValue: mockRepo },
+        { provide: ScreeningsCache, useValue: mockScreeningsCache },
       ],
     }).compile();
 
@@ -38,12 +46,13 @@ describe('HallsService', () => {
   });
 
   describe('createHall', () => {
-    it('delegates to the repository and returns the hall with seats', async () => {
+    it('delegates to the repository, returns the hall, and invalidates hall list cache', async () => {
       mockRepo.createHallWithSeats.mockResolvedValue(hallWithSeats);
       const dto = { name: 'Hall 1', rows: 1, seatsPerRow: 2 };
 
       await expect(service.createHall(dto)).resolves.toBe(hallWithSeats);
       expect(mockRepo.createHallWithSeats).toHaveBeenCalledWith(dto);
+      expect(mockScreeningsCache.delHalls).toHaveBeenCalled();
     });
   });
 
@@ -62,23 +71,34 @@ describe('HallsService', () => {
   });
 
   describe('listHalls', () => {
-    it('delegates to the repository', async () => {
+    it('returns cached halls without hitting the repository', async () => {
+      const halls = [{ id: 1, name: 'A', capacity: 10 }, { id: 2, name: 'B', capacity: 20 }];
+      mockScreeningsCache.getHalls.mockResolvedValue(halls);
+
+      await expect(service.listHalls()).resolves.toBe(halls);
+      expect(mockRepo.listHalls).not.toHaveBeenCalled();
+    });
+
+    it('queries the repository and populates cache on a miss', async () => {
       const halls = [{ id: 1 }, { id: 2 }];
+      mockScreeningsCache.getHalls.mockResolvedValue(null);
       mockRepo.listHalls.mockResolvedValue(halls);
 
       await expect(service.listHalls()).resolves.toBe(halls);
       expect(mockRepo.listHalls).toHaveBeenCalled();
+      expect(mockScreeningsCache.setHalls).toHaveBeenCalledWith(halls);
     });
   });
 
   describe('deleteHall', () => {
-    it('deletes when the hall exists and has no reservations', async () => {
+    it('deletes, invalidates hall list cache when the hall exists and has no reservations', async () => {
       mockRepo.findHallWithSeats.mockResolvedValue(hallWithSeats);
       mockRepo.hasReservations.mockResolvedValue(false);
       mockRepo.deleteHall.mockResolvedValue(hallWithSeats);
 
       await expect(service.deleteHall(1)).resolves.toBe(hallWithSeats);
       expect(mockRepo.deleteHall).toHaveBeenCalledWith(1);
+      expect(mockScreeningsCache.delHalls).toHaveBeenCalled();
     });
 
     it('throws ConflictException (409) when the hall has reservations', async () => {

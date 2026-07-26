@@ -72,6 +72,7 @@ export class ScreeningsService {
     });
     // A new screening can move its movie from coming-soon to now-showing.
     await this.moviesCache.delLists();
+    await this.screeningsCache.delMovieScreenings(dto.movieId);
     return screening;
   }
 
@@ -114,6 +115,8 @@ export class ScreeningsService {
     // cached seat map wrong — invalidate both.
     await this.moviesCache.delLists();
     await this.screeningsCache.delSeatMap(id);
+    await this.screeningsCache.delScreeningDetail(id);
+    await this.screeningsCache.delMovieScreenings(existing.movieId);
     return updated;
   }
 
@@ -128,11 +131,13 @@ export class ScreeningsService {
     );
     await this.moviesCache.delLists();
     await this.screeningsCache.delSeatMap(id);
+    await this.screeningsCache.delScreeningDetail(id);
+    await this.screeningsCache.delMovieScreenings(existing.movieId);
     return cancelled;
   }
 
   async deleteScreening(id: number): Promise<Screening> {
-    await this.getExisting(id);
+    const existing = await this.getExisting(id);
     if (await this.screeningsRepo.hasReservations(id)) {
       throw new ConflictException(
         'Cannot delete a screening with existing reservations; cancel it instead',
@@ -141,25 +146,44 @@ export class ScreeningsService {
     const deleted = await this.screeningsRepo.delete(id);
     await this.moviesCache.delLists();
     await this.screeningsCache.delSeatMap(id);
+    await this.screeningsCache.delScreeningDetail(id);
+    await this.screeningsCache.delMovieScreenings(existing.movieId);
     return deleted;
   }
 
   /** Public screening detail (movie + hall). Cancelled/unknown → 404. */
   async getScreeningDetail(id: number): Promise<ScreeningWithMovieHall> {
+    const cached = await this.screeningsCache.getScreeningDetail(id);
+    if (cached) {
+      if (cached.status === ScreenStatus.CANCELLED) {
+        throw new NotFoundException(`Screening ${id} not found`);
+      }
+      return cached;
+    }
     const screening = await this.screeningsRepo.findById(id);
     if (!screening || screening.status === ScreenStatus.CANCELLED) {
       throw new NotFoundException(`Screening ${id} not found`);
     }
+    await this.screeningsCache.setScreeningDetail(screening);
     return screening;
   }
 
   /** Future scheduled screenings of a published movie (selection UI). */
   async getMovieScreenings(movieId: number) {
+    const cached = await this.screeningsCache.getMovieScreenings(movieId);
+    if (cached) {
+      return cached;
+    }
     const movie = await this.moviesRepo.findPublishedById(movieId);
     if (!movie) {
       throw new NotFoundException(`Movie ${movieId} not found`);
     }
-    return this.screeningsRepo.findFutureScheduledByMovie(movieId, new Date());
+    const screenings = await this.screeningsRepo.findFutureScheduledByMovie(
+      movieId,
+      new Date(),
+    );
+    await this.screeningsCache.setMovieScreenings(movieId, screenings);
+    return screenings;
   }
 
   /**

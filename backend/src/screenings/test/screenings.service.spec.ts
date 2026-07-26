@@ -34,6 +34,15 @@ const mockScreeningsCache = {
   getSeatMap: jest.fn(),
   setSeatMap: jest.fn(),
   delSeatMap: jest.fn(),
+  getScreeningDetail: jest.fn(),
+  setScreeningDetail: jest.fn(),
+  delScreeningDetail: jest.fn(),
+  getMovieScreenings: jest.fn(),
+  setMovieScreenings: jest.fn(),
+  delMovieScreenings: jest.fn(),
+  getHalls: jest.fn(),
+  setHalls: jest.fn(),
+  delHalls: jest.fn(),
 };
 const mockMoviesCache = { delLists: jest.fn() };
 
@@ -60,6 +69,10 @@ describe('ScreeningsService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    // Cache getters return null (miss) by default; tests override as needed.
+    mockScreeningsCache.getScreeningDetail.mockResolvedValue(null);
+    mockScreeningsCache.getMovieScreenings.mockResolvedValue(null);
+    mockScreeningsCache.getSeatMap.mockResolvedValue(null);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -306,13 +319,21 @@ describe('ScreeningsService', () => {
   });
 
   describe('getScreeningDetail', () => {
-    it('returns a scheduled screening with movie + hall', async () => {
+    it('returns a scheduled screening with movie + hall (cache miss -> DB)', async () => {
       mockScreeningsRepo.findById.mockResolvedValue(existing);
 
       await expect(service.getScreeningDetail(10)).resolves.toBe(existing);
+      expect(mockScreeningsCache.setScreeningDetail).toHaveBeenCalledWith(existing);
     });
 
-    it('throws 404 for a cancelled screening', async () => {
+    it('serves from cache on a hit without querying the DB', async () => {
+      mockScreeningsCache.getScreeningDetail.mockResolvedValue(existing);
+
+      await expect(service.getScreeningDetail(10)).resolves.toBe(existing);
+      expect(mockScreeningsRepo.findById).not.toHaveBeenCalled();
+    });
+
+    it('throws 404 for a cancelled screening (fresh DB read)', async () => {
       mockScreeningsRepo.findById.mockResolvedValue({
         ...existing,
         status: ScreenStatus.CANCELLED,
@@ -321,6 +342,18 @@ describe('ScreeningsService', () => {
       await expect(service.getScreeningDetail(10)).rejects.toBeInstanceOf(
         NotFoundException,
       );
+    });
+
+    it('throws 404 for a cancelled screening that is cached', async () => {
+      mockScreeningsCache.getScreeningDetail.mockResolvedValue({
+        ...existing,
+        status: ScreenStatus.CANCELLED,
+      });
+
+      await expect(service.getScreeningDetail(10)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+      expect(mockScreeningsRepo.findById).not.toHaveBeenCalled();
     });
 
     it('throws 404 for an unknown id', async () => {
@@ -333,7 +366,7 @@ describe('ScreeningsService', () => {
   });
 
   describe('getMovieScreenings', () => {
-    it('returns future scheduled screenings for a published movie', async () => {
+    it('returns future scheduled screenings for a published movie (cache miss -> DB)', async () => {
       const screenings = [{ id: 1 }, { id: 2 }];
       mockMoviesRepo.findPublishedById.mockResolvedValue(movie);
       mockScreeningsRepo.findFutureScheduledByMovie.mockResolvedValue(
@@ -341,9 +374,16 @@ describe('ScreeningsService', () => {
       );
 
       await expect(service.getMovieScreenings(1)).resolves.toBe(screenings);
-      const arg = mockScreeningsRepo.findFutureScheduledByMovie.mock.calls[0];
-      expect(arg[0]).toBe(1);
-      expect(arg[1]).toBeInstanceOf(Date);
+      expect(mockScreeningsCache.setMovieScreenings).toHaveBeenCalledWith(1, screenings);
+    });
+
+    it('serves from cache on a hit without DB queries', async () => {
+      const cached = [{ id: 1 }, { id: 2 }];
+      mockScreeningsCache.getMovieScreenings.mockResolvedValue(cached);
+
+      await expect(service.getMovieScreenings(1)).resolves.toBe(cached);
+      expect(mockMoviesRepo.findPublishedById).not.toHaveBeenCalled();
+      expect(mockScreeningsRepo.findFutureScheduledByMovie).not.toHaveBeenCalled();
     });
 
     it('throws 404 for a draft/unknown movie and never queries screenings', async () => {
@@ -497,7 +537,7 @@ describe('ScreeningsService', () => {
     describe('write invalidation', () => {
       const dto = { movieId: 1, hallId: 2, startTime: START_ISO, price: 50 };
 
-      it('createScreening clears the browse lists', async () => {
+      it('createScreening clears browse lists and per-movie future screenings', async () => {
         mockMoviesRepo.findById.mockResolvedValue(movie);
         mockHallsRepo.findById.mockResolvedValue(hall);
         mockScreeningsRepo.findOverlapping.mockResolvedValue([]);
@@ -506,9 +546,10 @@ describe('ScreeningsService', () => {
         await service.createScreening(dto);
 
         expect(mockMoviesCache.delLists).toHaveBeenCalled();
+        expect(mockScreeningsCache.delMovieScreenings).toHaveBeenCalledWith(1);
       });
 
-      it('updateScreening clears the browse lists and the seat map', async () => {
+      it('updateScreening clears browse lists, seat map, detail, and per-movie future screenings', async () => {
         mockScreeningsRepo.findById.mockResolvedValue(existing);
         mockScreeningsRepo.findOverlapping.mockResolvedValue([]);
         mockScreeningsRepo.update.mockResolvedValue(existing);
@@ -517,9 +558,11 @@ describe('ScreeningsService', () => {
 
         expect(mockMoviesCache.delLists).toHaveBeenCalled();
         expect(mockScreeningsCache.delSeatMap).toHaveBeenCalledWith(10);
+        expect(mockScreeningsCache.delScreeningDetail).toHaveBeenCalledWith(10);
+        expect(mockScreeningsCache.delMovieScreenings).toHaveBeenCalledWith(1);
       });
 
-      it('cancelScreening clears the browse lists and the seat map', async () => {
+      it('cancelScreening clears browse lists, seat map, detail, and per-movie future screenings', async () => {
         mockScreeningsRepo.findById.mockResolvedValue(existing);
         mockScreeningsRepo.setStatus.mockResolvedValue({
           ...existing,
@@ -530,9 +573,11 @@ describe('ScreeningsService', () => {
 
         expect(mockMoviesCache.delLists).toHaveBeenCalled();
         expect(mockScreeningsCache.delSeatMap).toHaveBeenCalledWith(10);
+        expect(mockScreeningsCache.delScreeningDetail).toHaveBeenCalledWith(10);
+        expect(mockScreeningsCache.delMovieScreenings).toHaveBeenCalledWith(1);
       });
 
-      it('deleteScreening clears the browse lists and the seat map', async () => {
+      it('deleteScreening clears browse lists, seat map, detail, and per-movie future screenings', async () => {
         mockScreeningsRepo.findById.mockResolvedValue(existing);
         mockScreeningsRepo.hasReservations.mockResolvedValue(false);
         mockScreeningsRepo.delete.mockResolvedValue(existing);
@@ -541,6 +586,8 @@ describe('ScreeningsService', () => {
 
         expect(mockMoviesCache.delLists).toHaveBeenCalled();
         expect(mockScreeningsCache.delSeatMap).toHaveBeenCalledWith(10);
+        expect(mockScreeningsCache.delScreeningDetail).toHaveBeenCalledWith(10);
+        expect(mockScreeningsCache.delMovieScreenings).toHaveBeenCalledWith(1);
       });
     });
   });

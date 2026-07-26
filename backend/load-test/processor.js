@@ -39,7 +39,8 @@ async function loginBeforeScenario(context, ee) {
 }
 
 function pickAvailableSeat(requestParams, response, context, ee, next) {
-  const seats = JSON.parse(response.body);
+  const body = JSON.parse(response.body);
+  const seats = Array.isArray(body) ? body : [];
   const available = seats.filter((s) => s.status === 'AVAILABLE');
   if (available.length > 0) {
     const pick = available[Math.floor(Math.random() * available.length)];
@@ -71,7 +72,7 @@ function logContentionResult(requestParams, response, context, ee, next) {
 
 function captureReservationId(requestParams, response, context, ee, next) {
   const body = JSON.parse(response.body);
-  context.vars.reservationId = body.reservationId;
+  context.vars.reservationId = body.id;
   return next();
 }
 

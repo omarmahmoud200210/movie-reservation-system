@@ -14,12 +14,18 @@ const mockTx = {
 };
 
 const mockPrisma = {
-  $transaction: jest.fn(),
-  $queryRaw: jest.fn(),
-  reservation: {
-    findUnique: jest.fn(),
-    update: jest.fn(),
-    findMany: jest.fn(),
+  read: {
+    reservation: {
+      findUnique: jest.fn(),
+      findMany: jest.fn(),
+    },
+  },
+  write: {
+    $transaction: jest.fn(),
+    $queryRaw: jest.fn(),
+    reservation: {
+      update: jest.fn(),
+    },
   },
 };
 
@@ -38,8 +44,8 @@ describe('ReservationsRepository', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     // Run the interactive transaction callback against mockTx.
-    mockPrisma.$transaction.mockImplementation((cb: (tx: unknown) => unknown) =>
-      cb(mockTx),
+    mockPrisma.write.$transaction.mockImplementation(
+      (cb: (tx: unknown) => unknown) => cb(mockTx),
     );
 
     const module: TestingModule = await Test.createTestingModule({
@@ -128,12 +134,12 @@ describe('ReservationsRepository', () => {
 
   describe('extendHold', () => {
     it('updates heldUntil by id', async () => {
-      mockPrisma.reservation.update.mockResolvedValue({ id: 5 });
+      mockPrisma.write.reservation.update.mockResolvedValue({ id: 5 });
       const until = new Date('2026-07-02T12:30:00.000Z');
 
       await repo.extendHold(5, until);
 
-      expect(mockPrisma.reservation.update).toHaveBeenCalledWith({
+      expect(mockPrisma.write.reservation.update).toHaveBeenCalledWith({
         where: { id: 5 },
         data: { heldUntil: until },
       });
@@ -142,11 +148,11 @@ describe('ReservationsRepository', () => {
 
   describe('confirm', () => {
     it('sets status CONFIRMED and clears heldUntil', async () => {
-      mockPrisma.reservation.update.mockResolvedValue({ id: 5 });
+      mockPrisma.write.reservation.update.mockResolvedValue({ id: 5 });
 
       await repo.confirm(5);
 
-      expect(mockPrisma.reservation.update).toHaveBeenCalledWith({
+      expect(mockPrisma.write.reservation.update).toHaveBeenCalledWith({
         where: { id: 5 },
         data: { status: ReservationStatus.CONFIRMED, heldUntil: null },
       });
@@ -155,11 +161,11 @@ describe('ReservationsRepository', () => {
 
   describe('findById', () => {
     it('looks the reservation up by id', async () => {
-      mockPrisma.reservation.findUnique.mockResolvedValue({ id: 5 });
+      mockPrisma.read.reservation.findUnique.mockResolvedValue({ id: 5 });
 
       await repo.findById(5);
 
-      expect(mockPrisma.reservation.findUnique).toHaveBeenCalledWith({
+      expect(mockPrisma.read.reservation.findUnique).toHaveBeenCalledWith({
         where: { id: 5 },
       });
     });
@@ -167,11 +173,11 @@ describe('ReservationsRepository', () => {
 
   describe('setStatus', () => {
     it('updates the reservation status by id', async () => {
-      mockPrisma.reservation.update.mockResolvedValue({ id: 5 });
+      mockPrisma.write.reservation.update.mockResolvedValue({ id: 5 });
 
       await repo.setStatus(5, ReservationStatus.CANCELLED);
 
-      expect(mockPrisma.reservation.update).toHaveBeenCalledWith({
+      expect(mockPrisma.write.reservation.update).toHaveBeenCalledWith({
         where: { id: 5 },
         data: { status: ReservationStatus.CANCELLED },
       });
@@ -180,11 +186,11 @@ describe('ReservationsRepository', () => {
 
   describe('findByUser', () => {
     it('lists the user reservations newest first with seat + screening + movie', async () => {
-      mockPrisma.reservation.findMany.mockResolvedValue([]);
+      mockPrisma.read.reservation.findMany.mockResolvedValue([]);
 
       await repo.findByUser(7);
 
-      expect(mockPrisma.reservation.findMany).toHaveBeenCalledWith({
+      expect(mockPrisma.read.reservation.findMany).toHaveBeenCalledWith({
         where: { userId: 7 },
         include: {
           seat: true,
@@ -201,15 +207,15 @@ describe('ReservationsRepository', () => {
         { id: 100, userId: 7, screeningId: 3, seatId: 11 },
         { id: 101, userId: 9, screeningId: 3, seatId: 12 },
       ];
-      mockPrisma.$queryRaw.mockResolvedValue(released);
+      mockPrisma.write.$queryRaw.mockResolvedValue(released);
       const now = new Date('2026-07-04T12:00:00.000Z');
 
       await expect(repo.releaseExpiredHolds(now)).resolves.toBe(released);
-      expect(mockPrisma.$queryRaw).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.write.$queryRaw).toHaveBeenCalledTimes(1);
     });
 
     it('resolves with an empty array when nothing has expired', async () => {
-      mockPrisma.$queryRaw.mockResolvedValue([]);
+      mockPrisma.write.$queryRaw.mockResolvedValue([]);
 
       await expect(repo.releaseExpiredHolds(new Date())).resolves.toEqual([]);
     });

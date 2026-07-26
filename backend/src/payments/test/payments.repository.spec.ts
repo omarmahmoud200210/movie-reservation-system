@@ -4,20 +4,26 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { PaymentsRepository } from '../payments.repository';
 
 const mockPrisma = {
-  payment: {
-    findUnique: jest.fn(),
-    findFirst: jest.fn(),
-    create: jest.fn(),
-    update: jest.fn(),
-    findMany: jest.fn(),
+  read: {
+    payment: {
+      findUnique: jest.fn(),
+      findFirst: jest.fn(),
+      findMany: jest.fn(),
+    },
+    refundPolicy: {
+      findFirst: jest.fn(),
+    },
   },
-  reservation: {
-    update: jest.fn(),
+  write: {
+    payment: {
+      create: jest.fn(),
+      update: jest.fn(),
+    },
+    reservation: {
+      update: jest.fn(),
+    },
+    $transaction: jest.fn(),
   },
-  refundPolicy: {
-    findFirst: jest.fn(),
-  },
-  $transaction: jest.fn(),
 };
 
 describe('PaymentsRepository', () => {
@@ -36,11 +42,11 @@ describe('PaymentsRepository', () => {
 
   describe('findByReservationId', () => {
     it('looks up by the unique reservationId', async () => {
-      mockPrisma.payment.findUnique.mockResolvedValue({ id: 1 });
+      mockPrisma.read.payment.findUnique.mockResolvedValue({ id: 1 });
 
       await repo.findByReservationId(100);
 
-      expect(mockPrisma.payment.findUnique).toHaveBeenCalledWith({
+      expect(mockPrisma.read.payment.findUnique).toHaveBeenCalledWith({
         where: { reservationId: 100 },
       });
     });
@@ -48,11 +54,11 @@ describe('PaymentsRepository', () => {
 
   describe('findById', () => {
     it('looks up by the primary key', async () => {
-      mockPrisma.payment.findUnique.mockResolvedValue({ id: 1 });
+      mockPrisma.read.payment.findUnique.mockResolvedValue({ id: 1 });
 
       await repo.findById(1);
 
-      expect(mockPrisma.payment.findUnique).toHaveBeenCalledWith({
+      expect(mockPrisma.read.payment.findUnique).toHaveBeenCalledWith({
         where: { id: 1 },
       });
     });
@@ -60,11 +66,11 @@ describe('PaymentsRepository', () => {
 
   describe('findByStripeEventId', () => {
     it('looks up by the unique stripeEventId', async () => {
-      mockPrisma.payment.findUnique.mockResolvedValue(null);
+      mockPrisma.read.payment.findUnique.mockResolvedValue(null);
 
       await repo.findByStripeEventId('evt_123');
 
-      expect(mockPrisma.payment.findUnique).toHaveBeenCalledWith({
+      expect(mockPrisma.read.payment.findUnique).toHaveBeenCalledWith({
         where: { stripeEventId: 'evt_123' },
       });
     });
@@ -72,19 +78,19 @@ describe('PaymentsRepository', () => {
 
   describe('findByStripePaymentId', () => {
     it('looks up by stripePaymentId', async () => {
-      mockPrisma.payment.findFirst.mockResolvedValue({ id: 1 });
+      mockPrisma.read.payment.findFirst.mockResolvedValue({ id: 1 });
 
       await expect(repo.findByStripePaymentId('pi_123')).resolves.toEqual({
         id: 1,
       });
 
-      expect(mockPrisma.payment.findFirst).toHaveBeenCalledWith({
+      expect(mockPrisma.read.payment.findFirst).toHaveBeenCalledWith({
         where: { stripePaymentId: 'pi_123' },
       });
     });
 
     it('returns null when no payment matches', async () => {
-      mockPrisma.payment.findFirst.mockResolvedValue(null);
+      mockPrisma.read.payment.findFirst.mockResolvedValue(null);
 
       await expect(
         repo.findByStripePaymentId('pi_missing'),
@@ -101,21 +107,21 @@ describe('PaymentsRepository', () => {
         status: PaymentStatus.PENDING,
         stripeSessionId: '',
       };
-      mockPrisma.payment.create.mockResolvedValue({ id: 1, ...data });
+      mockPrisma.write.payment.create.mockResolvedValue({ id: 1, ...data });
 
       await repo.create(data);
 
-      expect(mockPrisma.payment.create).toHaveBeenCalledWith({ data });
+      expect(mockPrisma.write.payment.create).toHaveBeenCalledWith({ data });
     });
   });
 
   describe('update', () => {
     it('updates a Payment row by id', async () => {
-      mockPrisma.payment.update.mockResolvedValue({ id: 1 });
+      mockPrisma.write.payment.update.mockResolvedValue({ id: 1 });
 
       await repo.update(1, { status: PaymentStatus.SUCCEEDED });
 
-      expect(mockPrisma.payment.update).toHaveBeenCalledWith({
+      expect(mockPrisma.write.payment.update).toHaveBeenCalledWith({
         where: { id: 1 },
         data: { status: PaymentStatus.SUCCEEDED },
       });
@@ -125,11 +131,11 @@ describe('PaymentsRepository', () => {
   describe('findStuckTimedOut', () => {
     it('finds TIMED_OUT payments older than the cutoff', async () => {
       const cutoff = new Date('2026-07-07T00:00:00.000Z');
-      mockPrisma.payment.findMany.mockResolvedValue([]);
+      mockPrisma.read.payment.findMany.mockResolvedValue([]);
 
       await repo.findStuckTimedOut(cutoff);
 
-      expect(mockPrisma.payment.findMany).toHaveBeenCalledWith({
+      expect(mockPrisma.read.payment.findMany).toHaveBeenCalledWith({
         where: { status: PaymentStatus.TIMED_OUT, createdAt: { lt: cutoff } },
       });
     });
@@ -137,13 +143,13 @@ describe('PaymentsRepository', () => {
 
   describe('findRefundPolicy', () => {
     it('finds the policy whose [hoursFrom, hoursTo) range contains the value', async () => {
-      mockPrisma.refundPolicy.findFirst.mockResolvedValue({
+      mockPrisma.read.refundPolicy.findFirst.mockResolvedValue({
         refundPercent: 50,
       });
 
       await repo.findRefundPolicy(30);
 
-      expect(mockPrisma.refundPolicy.findFirst).toHaveBeenCalledWith({
+      expect(mockPrisma.read.refundPolicy.findFirst).toHaveBeenCalledWith({
         where: { hoursFrom: { lte: 30 }, hoursTo: { gt: 30 } },
       });
     });
@@ -153,23 +159,23 @@ describe('PaymentsRepository', () => {
     it('confirms the payment and the reservation in one transaction', async () => {
       const payment = { id: 1, status: PaymentStatus.SUCCEEDED };
       const reservation = { id: 100, status: 'CONFIRMED' };
-      mockPrisma.payment.update.mockReturnValue(payment);
-      mockPrisma.reservation.update.mockReturnValue(reservation);
-      mockPrisma.$transaction.mockResolvedValue([payment, reservation]);
+      mockPrisma.write.payment.update.mockReturnValue(payment);
+      mockPrisma.write.reservation.update.mockReturnValue(reservation);
+      mockPrisma.write.$transaction.mockResolvedValue([payment, reservation]);
 
       await expect(
         repo.confirmWithReservation(1, 100, 'pi_9'),
       ).resolves.toEqual({ payment, reservation });
 
-      expect(mockPrisma.payment.update).toHaveBeenCalledWith({
+      expect(mockPrisma.write.payment.update).toHaveBeenCalledWith({
         where: { id: 1 },
         data: { status: PaymentStatus.SUCCEEDED, stripePaymentId: 'pi_9' },
       });
-      expect(mockPrisma.reservation.update).toHaveBeenCalledWith({
+      expect(mockPrisma.write.reservation.update).toHaveBeenCalledWith({
         where: { id: 100 },
         data: { status: 'CONFIRMED', heldUntil: null },
       });
-      expect(mockPrisma.$transaction).toHaveBeenCalledWith([
+      expect(mockPrisma.write.$transaction).toHaveBeenCalledWith([
         payment,
         reservation,
       ]);
@@ -180,20 +186,20 @@ describe('PaymentsRepository', () => {
     it('declines the payment and cancels the reservation in one transaction', async () => {
       const payment = { id: 2, status: PaymentStatus.DECLINED };
       const reservation = { id: 101, status: 'CANCELLED' };
-      mockPrisma.payment.update.mockReturnValue(payment);
-      mockPrisma.reservation.update.mockReturnValue(reservation);
-      mockPrisma.$transaction.mockResolvedValue([payment, reservation]);
+      mockPrisma.write.payment.update.mockReturnValue(payment);
+      mockPrisma.write.reservation.update.mockReturnValue(reservation);
+      mockPrisma.write.$transaction.mockResolvedValue([payment, reservation]);
 
       await expect(repo.declineWithReservation(2, 101)).resolves.toEqual({
         payment,
         reservation,
       });
 
-      expect(mockPrisma.payment.update).toHaveBeenCalledWith({
+      expect(mockPrisma.write.payment.update).toHaveBeenCalledWith({
         where: { id: 2 },
         data: { status: PaymentStatus.DECLINED },
       });
-      expect(mockPrisma.reservation.update).toHaveBeenCalledWith({
+      expect(mockPrisma.write.reservation.update).toHaveBeenCalledWith({
         where: { id: 101 },
         data: { status: 'CANCELLED' },
       });

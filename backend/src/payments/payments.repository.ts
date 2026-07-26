@@ -8,44 +8,44 @@ export class PaymentsRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   findByReservationId(reservationId: number): Promise<Payment | null> {
-    return this.prisma.payment.findUnique({ where: { reservationId } });
+    return this.prisma.read.payment.findUnique({ where: { reservationId } });
   }
 
   findById(id: number): Promise<Payment | null> {
-    return this.prisma.payment.findUnique({ where: { id } });
+    return this.prisma.read.payment.findUnique({ where: { id } });
   }
 
   findByStripeEventId(stripeEventId: string): Promise<Payment | null> {
-    return this.prisma.payment.findUnique({ where: { stripeEventId } });
+    return this.prisma.read.payment.findUnique({ where: { stripeEventId } });
   }
 
   findByStripePaymentId(stripePaymentId: string): Promise<Payment | null> {
-    return this.prisma.payment.findFirst({ where: { stripePaymentId } });
+    return this.prisma.read.payment.findFirst({ where: { stripePaymentId } });
   }
 
   create(data: Prisma.PaymentUncheckedCreateInput): Promise<Payment> {
-    return this.prisma.payment.create({ data });
+    return this.prisma.write.payment.create({ data });
   }
 
   update(
     id: number,
     data: Prisma.PaymentUncheckedUpdateInput,
   ): Promise<Payment> {
-    return this.prisma.payment.update({ where: { id }, data });
+    return this.prisma.write.payment.update({ where: { id }, data });
   }
 
   delete(id: number): Promise<Payment> {
-    return this.prisma.payment.delete({ where: { id } });
+    return this.prisma.write.payment.delete({ where: { id } });
   }
 
   findStuckTimedOut(olderThan: Date): Promise<Payment[]> {
-    return this.prisma.payment.findMany({
+    return this.prisma.read.payment.findMany({
       where: { status: PaymentStatus.TIMED_OUT, createdAt: { lt: olderThan } },
     });
   }
 
   findRefundPolicy(hoursUntilScreening: number): Promise<RefundPolicy | null> {
-    return this.prisma.refundPolicy.findFirst({
+    return this.prisma.read.refundPolicy.findFirst({
       where: {
         hoursFrom: { lte: hoursUntilScreening },
         hoursTo: { gt: hoursUntilScreening },
@@ -57,12 +57,12 @@ export class PaymentsRepository {
     paymentId: number,
     reservationId: number,
   ): Promise<{ payment: Payment; reservation: Reservation }> {
-    const [payment, reservation] = await this.prisma.$transaction([
-      this.prisma.payment.update({
+    const [payment, reservation] = await this.prisma.write.$transaction([
+      this.prisma.write.payment.update({
         where: { id: paymentId },
         data: { status: PaymentStatus.DECLINED },
       }),
-      this.prisma.reservation.update({
+      this.prisma.write.reservation.update({
         where: { id: reservationId },
         data: { status: ReservationStatus.CANCELLED },
       }),
@@ -75,15 +75,15 @@ export class PaymentsRepository {
     reservationId: number,
     stripePaymentId: string,
   ): Promise<{ payment: Payment; reservation: Reservation }> {
-    const [payment, reservation] = await this.prisma.$transaction([
-      this.prisma.payment.update({
+    const [payment, reservation] = await this.prisma.write.$transaction([
+      this.prisma.write.payment.update({
         where: { id: paymentId },
         data: {
           status: PaymentStatus.SUCCEEDED,
           stripePaymentId,
         },
       }),
-      this.prisma.reservation.update({
+      this.prisma.write.reservation.update({
         where: { id: reservationId },
         data: { status: ReservationStatus.CONFIRMED, heldUntil: null },
       }),

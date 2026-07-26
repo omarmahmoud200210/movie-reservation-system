@@ -13,6 +13,11 @@ import { ScreeningsRepository } from '../../screenings/screenings.repository';
 import PaymentAbuseService from '../../redis/payment-abuse.service';
 import { PaymentsService } from '../../payments/payments.service';
 import {
+  CONCURRENCY_LIMIT,
+  ConcurrencyGuard,
+} from '../../common/guards/concurrency.guard';
+import { ReservationBreaker } from '../reservation-breaker.service';
+import {
   RESERVATION_CANCELLED,
   RESERVATION_CONFIRMED,
   RESERVATION_CREATED,
@@ -35,6 +40,7 @@ const mockPaymentAbuse = {
   recordFailure: jest.fn(),
 };
 const mockPaymentsService = { refundReservation: jest.fn() };
+const mockReservationBreaker = { holdSeat: jest.fn() };
 
 const NOW = new Date('2026-07-02T12:00:00.000Z');
 const HELD_UNTIL = new Date('2026-07-02T12:10:00.000Z'); // NOW + 10min
@@ -53,6 +59,9 @@ describe('ReservationsService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockReservationBreaker.holdSeat.mockImplementation(
+      (params) => mockReservationsRepo.holdSeat(params),
+    );
     jest.useFakeTimers().setSystemTime(NOW);
 
     const module: TestingModule = await Test.createTestingModule({
@@ -63,6 +72,15 @@ describe('ReservationsService', () => {
         { provide: EventEmitter2, useValue: mockEvents },
         { provide: PaymentAbuseService, useValue: mockPaymentAbuse },
         { provide: PaymentsService, useValue: mockPaymentsService },
+        {
+          provide: ConcurrencyGuard,
+          useValue: { acquire: jest.fn().mockResolvedValue(jest.fn()) },
+        },
+        { provide: CONCURRENCY_LIMIT, useValue: 4 },
+        {
+          provide: ReservationBreaker,
+          useValue: mockReservationBreaker,
+        },
       ],
     }).compile();
 

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Artillery Load Test Report</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #0f172a; color: #e2e8f0; padding: 24px; }
+    h1 { font-size: 1.8rem; margin-bottom: 8px; color: #f8fafc; }
+    .subtitle { color: #94a3b8; margin-bottom: 32px; font-size: 0.9rem; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 32px; }
+    .card { background: #1e293b; border-radius: 12px; padding: 20px; border: 1px solid #334155; }
+    .card .label { font-size: 0.75rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; }
+    .card .value { font-size: 1.8rem; font-weight: 700; margin-top: 4px; }
+    .card .unit { font-size: 0.8rem; color: #64748b; }
+    .good { color: #4ade80; }
+    .warn { color: #fbbf24; }
+    .bad { color: #f87171; }
+    .chart-container { background: #1e293b; border-radius: 12px; padding: 24px; border: 1px solid #334155; margin-bottom: 24px; }
+    .chart-container h2 { font-size: 1.1rem; margin-bottom: 16px; color: #f1f5f9; }
+    canvas { width: 100% !important; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #334155; }
+    th { color: #94a3b8; font-size: 0.75rem; text-transform: uppercase; }
+    td { color: #e2e8f0; }
+    .status-badge { display: inline-block; padding: 2px 10px; border-radius: 9999px; font-size: 0.8rem; font-weight: 600; }
+    .status-2xx { background: #166534; color: #4ade80; }
+    .status-4xx { background: #713f12; color: #fbbf24; }
+    .status-5xx { background: #7f1d1d; color: #f87171; }
+  </style>
+</head>
+<body>
+  <h1>&#128202; Artillery Load Test Report</h1>
+  <p class="subtitle">Generated at 7/25/2026, 1:01:32 AM &mdash; 110 sample periods</p>
+
+  <div class="cards">
+    <div class="card"><div class="label">Total Requests</div><div class="value">77,385</div></div>
+    <div class="card"><div class="label">Median (p50)</div><div class="value good">478.3<span class="unit"> ms</span></div></div>
+    <div class="card"><div class="label">p95</div><div class="value warn">3134.5<span class="unit"> ms</span></div></div>
+    <div class="card"><div class="label">p99</div><div class="value warn">5826.9<span class="unit"> ms</span></div></div>
+    <div class="card"><div class="label">Max</div><div class="value bad">8008<span class="unit"> ms</span></div></div>
+    <div class="card"><div class="label">Error Rate</div><div class="value bad">6.53<span class="unit"> %</span></div></div>
+  </div>
+
+  <div class="chart-container">
+    <h2>Response Time Over Time</h2>
+    <canvas id="latencyChart"></canvas>
+  </div>
+
+  <div class="chart-container">
+    <h2>Throughput &amp; Errors</h2>
+    <canvas id="rpsChart"></canvas>
+  </div>
+
+  <div class="chart-container">
+    <h2>HTTP Status Code Breakdown</h2>
+    <table>
+      <thead><tr><th>Status</th><th>Count</th><th>Share</th></tr></thead>
+      <tbody><tr><td><span class="status-badge status-2xx">200</span></td><td>69,959</td><td>90.9%</td></tr>
+<tr><td><span class="status-badge status-2xx">201</span></td><td>1,952</td><td>2.5%</td></tr>
+<tr><td><span class="status-badge status-4xx">400</span></td><td>28</td><td>0.0%</td></tr>
+<tr><td><span class="status-badge status-4xx">409</span></td><td>3</td><td>0.0%</td></tr>
+<tr><td><span class="status-badge status-4xx">429</span></td><td>3</td><td>0.0%</td></tr>
+<tr><td><span class="status-badge status-5xx">500</span></td><td>148</td><td>0.2%</td></tr>
+<tr><td><span class="status-badge status-5xx">503</span></td><td>4,841</td><td>6.3%</td></tr></tbody>
+    </table>
+  </div>
+
+  <script>
+    var chartDefaults = {
+      responsive: true,
+      interaction: { mode: "index", intersect: false },
+      scales: {
+        x: { ticks: { color: "#64748b" }, grid: { color: "#1e293b" } },
+        y: { ticks: { color: "#64748b" }, grid: { color: "#334155" } }
+      },
+      plugins: { legend: { labels: { color: "#94a3b8" } } }
+    };
+
+    new Chart(document.getElementById("latencyChart"), {
+      type: "line",
+      data: {
+        labels: ["Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date"],
+        datasets: [
+          { label: "p50", data: [22,228.2,252.2,138.4,206.5,89.1,7.9,10.1,13.9,30.9,219.2,314.2,340.4,468.8,415.8,1153.1,1022.7,361.5,407.5,1274.3,889.1,572.6,772.9,1353.1,5168,1107.9,889.1,497.8,468.8,1043.3,1085.9,441.5,742.6,550.1,1436.8,820.7,368.8,528.6,399.5,518.1,1587.9,963.1,497.8,214.9,361.5,424.2,450.4,415.8,478.3,354.3,320.6,391.6,340.4,528.6,727.9,347.3,314.2,247.2,441.5,478.3,361.5,788.5,252.2,399.5,561.2,450.4,528.6,478.3,383.8,391.6,391.6,497.8,944,1085.9,242.3,257.3,424.2,383.8,713.5,1043.3,424.2,407.5,727.9,1587.9,871.5,658.6,478.3,424.2,871.5,572.6,314.2,320.6,376.2,407.5,424.2,608,528.6,620.3,1085.9,837.3,1465.9,1249.1,1495.5,1620,854.2,727.9,608,925.4,713.5,1130.2], borderColor: "#4ade80", borderWidth: 2, fill: false, tension: 0.3 },
+          { label: "p95", data: [117.9,871.5,982.6,596,820.7,528.6,63.4,127.8,149.9,237.5,1002.4,1978.7,1408.4,2671,2101.1,4316.6,6569.8,2725,2465.6,4583.6,6064.7,3905.8,5826.9,6312.2,7709.8,1826.6,5378.9,2725,2725,4867,4147.4,3395.5,4316.6,2465.6,5487.5,4770.6,2143.5,2465.6,3134.5,3464.1,5944.6,3262.4,4583.6,963.1,1620,1978.7,1939.5,1790.4,2465.6,2416.8,1790.4,1790.4,1652.8,1978.7,3752.7,1826.6,1620,1326.4,1939.5,2780,1863.5,2836.2,1652.8,1652.8,2951.9,3534.1,2231,1826.6,2101.1,1686.1,1790.4,2780,5168,5598.4,1176.4,1300.1,2231,1720.2,2780,4583.6,2322.1,2186.8,3011.6,6064.7,3828.5,3395.5,3828.5,1587.9,2893.5,3752.7,1353.1,1326.4,1720.2,1686.1,2018.7,2369,1755,2416.8,4492.8,3072.4,5826.9,6439.7,6187.2,4492.8,3197.8,3134.5,2322.1,3905.8,3328.3,3752.7], borderColor: "#fbbf24", borderWidth: 2, fill: false, tension: 0.3 },
+          { label: "p99", data: [347.3,1200.1,1274.3,788.5,1200.1,727.9,117.9,206.5,295.9,340.4,2186.8,3011.6,2186.8,4065.2,3072.4,5378.9,8024.5,4867,3197.8,5168,7260.8,6569.8,7557.1,6439.7,7709.8,1826.6,6439.7,3678.4,4231.1,5944.6,6439.7,5487.5,5065.6,3678.4,6976.1,6976.1,5065.6,3134.5,3752.7,4965.3,6439.7,6569.8,6439.7,1863.5,2231,2465.6,2951.9,2725,3395.5,3197.8,3905.8,2725,2566.3,2893.5,4965.3,3072.4,2231,1939.5,2618.1,3905.8,3197.8,3828.5,5944.6,2416.8,3534.1,4867,3011.6,2893.5,3395.5,2515.5,2618.1,3678.4,6439.7,6702.6,1939.5,1826.6,3464.1,2618.1,3534.1,5378.9,2725,3011.6,3752.7,6569.8,5168,4676.2,5944.6,2951.9,4867,5598.4,2186.8,2018.7,2671,2276.1,2618.1,3605.5,2836.2,3534.1,6064.7,4403.8,7407.5,6976.1,7709.8,5378.9,5272.4,4583.6,2893.5,5378.9,4867,4403.8], borderColor: "#f87171", borderWidth: 2, fill: false, tension: 0.3 }
+        ]
+      },
+      options: Object.assign({}, chartDefaults, { scales: { x: chartDefaults.scales.x, y: Object.assign({}, chartDefaults.scales.y, { title: { display: true, text: "ms", color: "#94a3b8" } }) } })
+    });
+
+    new Chart(document.getElementById("rpsChart"), {
+      type: "bar",
+      data: {
+        labels: ["Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date","Invalid Date"],
+        datasets: [
+          { label: "Successful (2xx)", data: [88,745,925,824,842,912,884,873,867,830,689,610,563,556,411,368,581,514,412,471,615,244,554,158,59,125,603,612,655,434,715,555,764,633,457,632,568,470,642,491,514,688,767,745,794,719,850,738,810,747,774,811,719,602,625,617,643,597,626,569,652,647,781,765,740,895,712,775,806,829,675,728,744,667,623,610,595,643,468,673,603,690,660,677,872,815,867,746,700,876,797,772,749,716,565,647,642,486,596,554,398,728,597,748,848,801,689,711,765,662], backgroundColor: "#166534", borderRadius: 4 },
+          { label: "Errors", data: [6,30,50,21,28,23,0,0,0,6,12,33,11,42,8,23,16,58,16,17,64,6,61,2,76,0,56,53,47,18,60,77,66,38,16,38,69,29,35,28,45,65,79,46,59,50,63,59,79,25,66,77,51,53,48,47,37,21,30,40,44,20,73,34,54,82,39,60,56,72,38,73,54,100,31,34,36,45,13,62,24,54,37,71,103,71,86,51,50,88,50,53,53,55,33,52,33,33,40,64,25,71,58,56,83,78,42,54,78,78], backgroundColor: "#7f1d1d", borderRadius: 4 }
+        ]
+      },
+      options: Object.assign({}, chartDefaults, { scales: { x: Object.assign({}, chartDefaults.scales.x, { stacked: true }), y: Object.assign({}, chartDefaults.scales.y, { stacked: true, title: { display: true, text: "requests", color: "#94a3b8" } }) } })
+    });
+  </script>
+</body>
+</html>

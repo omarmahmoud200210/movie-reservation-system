@@ -14,16 +14,22 @@ const tx = {
 };
 
 const mockPrisma = {
-  // Run the callback against `tx` so we can assert work happens on the
-  // transaction client (atomic) rather than the root client.
-  $transaction: jest.fn((cb: (client: typeof tx) => unknown) => cb(tx)),
-  hall: {
-    findUnique: jest.fn(),
-    findMany: jest.fn(),
-    delete: jest.fn(),
+  read: {
+    hall: {
+      findUnique: jest.fn(),
+      findMany: jest.fn(),
+    },
+    reservation: {
+      findFirst: jest.fn(),
+    },
   },
-  reservation: {
-    findFirst: jest.fn(),
+  write: {
+    // Run the callback against `tx` so we can assert work happens on the
+    // transaction client (atomic) rather than the root client.
+    $transaction: jest.fn((cb: (client: typeof tx) => unknown) => cb(tx)),
+    hall: {
+      delete: jest.fn(),
+    },
   },
 };
 
@@ -126,7 +132,7 @@ describe('HallsRepository', () => {
     it('does all writes inside a single transaction (atomic rollback)', async () => {
       await repo.createHallWithSeats({ name: 'Hall 1', rows: 2, seatsPerRow: 2 });
 
-      expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.write.$transaction).toHaveBeenCalledTimes(1);
       // Work runs on the tx client, never the root prisma client.
       expect(tx.hall.create).toHaveBeenCalled();
       expect(tx.seat.createMany).toHaveBeenCalled();
@@ -154,11 +160,11 @@ describe('HallsRepository', () => {
 
   describe('findHallWithSeats', () => {
     it('queries by id with seats included', async () => {
-      mockPrisma.hall.findUnique.mockResolvedValue({ id: 1, seats: [] });
+      mockPrisma.read.hall.findUnique.mockResolvedValue({ id: 1, seats: [] });
 
       await repo.findHallWithSeats(1);
 
-      expect(mockPrisma.hall.findUnique).toHaveBeenCalledWith({
+      expect(mockPrisma.read.hall.findUnique).toHaveBeenCalledWith({
         where: { id: 1 },
         include: { seats: { orderBy: [{ row: 'asc' }, { id: 'asc' }] } },
       });
@@ -167,11 +173,11 @@ describe('HallsRepository', () => {
 
   describe('listHalls', () => {
     it('lists halls ordered by id asc', async () => {
-      mockPrisma.hall.findMany.mockResolvedValue([]);
+      mockPrisma.read.hall.findMany.mockResolvedValue([]);
 
       await repo.listHalls();
 
-      expect(mockPrisma.hall.findMany).toHaveBeenCalledWith({
+      expect(mockPrisma.read.hall.findMany).toHaveBeenCalledWith({
         orderBy: { id: 'asc' },
       });
     });
@@ -179,27 +185,27 @@ describe('HallsRepository', () => {
 
   describe('deleteHall', () => {
     it('deletes by id', async () => {
-      mockPrisma.hall.delete.mockResolvedValue({ id: 1 });
+      mockPrisma.write.hall.delete.mockResolvedValue({ id: 1 });
 
       await repo.deleteHall(1);
 
-      expect(mockPrisma.hall.delete).toHaveBeenCalledWith({ where: { id: 1 } });
+      expect(mockPrisma.write.hall.delete).toHaveBeenCalledWith({ where: { id: 1 } });
     });
   });
 
   describe('hasReservations', () => {
     it('finds a reservation across the hall screenings and returns true when one exists', async () => {
-      mockPrisma.reservation.findFirst.mockResolvedValue({ id: 3 });
+      mockPrisma.read.reservation.findFirst.mockResolvedValue({ id: 3 });
 
       await expect(repo.hasReservations(7)).resolves.toBe(true);
-      expect(mockPrisma.reservation.findFirst).toHaveBeenCalledWith({
+      expect(mockPrisma.read.reservation.findFirst).toHaveBeenCalledWith({
         where: { screen: { hallId: 7 } },
         select: { id: true },
       });
     });
 
     it('returns false when there are none', async () => {
-      mockPrisma.reservation.findFirst.mockResolvedValue(null);
+      mockPrisma.read.reservation.findFirst.mockResolvedValue(null);
 
       await expect(repo.hasReservations(7)).resolves.toBe(false);
     });

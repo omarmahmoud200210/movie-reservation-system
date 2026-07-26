@@ -18,6 +18,12 @@ const common_1 = require("@nestjs/common");
 const redis_cache_1 = __importDefault(require("../redis/redis.cache"));
 const seatMapKey = (screeningId) => `seat_map:screening:${screeningId}`;
 const SEAT_MAP_TTL_SECONDS = 300;
+const screeningDetailKey = (id) => `screening:detail:${id}`;
+const SCREENING_DETAIL_TTL_SECONDS = 60;
+const movieScreeningsKey = (movieId) => `screening:future:${movieId}`;
+const MOVIE_SCREENINGS_TTL_SECONDS = 60;
+const HALL_LIST_KEY = 'hall:list';
+const HALL_LIST_TTL_SECONDS = 300;
 let ScreeningsCache = ScreeningsCache_1 = class ScreeningsCache {
     redis;
     logger = new common_1.Logger(ScreeningsCache_1.name);
@@ -48,6 +54,84 @@ let ScreeningsCache = ScreeningsCache_1 = class ScreeningsCache {
         }
         catch (err) {
             this.logger.warn(`delSeatMap(${screeningId}) failed: ${String(err)}`);
+        }
+    }
+    async getScreeningDetail(id) {
+        try {
+            const raw = await this.redis.get(screeningDetailKey(id));
+            return raw ? JSON.parse(raw) : null;
+        }
+        catch (err) {
+            this.logger.warn(`getScreeningDetail(${id}) cache miss on error: ${String(err)}`);
+            return null;
+        }
+    }
+    async setScreeningDetail(screening) {
+        try {
+            await this.redis.set(screeningDetailKey(screening.id), JSON.stringify(screening), 'EX', SCREENING_DETAIL_TTL_SECONDS);
+        }
+        catch (err) {
+            this.logger.warn(`setScreeningDetail(${screening.id}) failed: ${String(err)}`);
+        }
+    }
+    async delScreeningDetail(id) {
+        try {
+            await this.redis.del(screeningDetailKey(id));
+        }
+        catch (err) {
+            this.logger.warn(`delScreeningDetail(${id}) failed: ${String(err)}`);
+        }
+    }
+    async getMovieScreenings(movieId) {
+        try {
+            const raw = await this.redis.get(movieScreeningsKey(movieId));
+            return raw ? JSON.parse(raw) : null;
+        }
+        catch (err) {
+            this.logger.warn(`getMovieScreenings(${movieId}) cache miss on error: ${String(err)}`);
+            return null;
+        }
+    }
+    async setMovieScreenings(movieId, screenings) {
+        try {
+            await this.redis.set(movieScreeningsKey(movieId), JSON.stringify(screenings), 'EX', MOVIE_SCREENINGS_TTL_SECONDS);
+        }
+        catch (err) {
+            this.logger.warn(`setMovieScreenings(${movieId}) failed: ${String(err)}`);
+        }
+    }
+    async delMovieScreenings(movieId) {
+        try {
+            await this.redis.del(movieScreeningsKey(movieId));
+        }
+        catch (err) {
+            this.logger.warn(`delMovieScreenings(${movieId}) failed: ${String(err)}`);
+        }
+    }
+    async getHalls() {
+        try {
+            const raw = await this.redis.get(HALL_LIST_KEY);
+            return raw ? JSON.parse(raw) : null;
+        }
+        catch (err) {
+            this.logger.warn(`getHalls cache miss on error: ${String(err)}`);
+            return null;
+        }
+    }
+    async setHalls(halls) {
+        try {
+            await this.redis.set(HALL_LIST_KEY, JSON.stringify(halls), 'EX', HALL_LIST_TTL_SECONDS);
+        }
+        catch (err) {
+            this.logger.warn(`setHalls failed: ${String(err)}`);
+        }
+    }
+    async delHalls() {
+        try {
+            await this.redis.del(HALL_LIST_KEY);
+        }
+        catch (err) {
+            this.logger.warn(`delHalls failed: ${String(err)}`);
         }
     }
 };

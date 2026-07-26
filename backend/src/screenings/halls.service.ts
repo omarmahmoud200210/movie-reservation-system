@@ -6,13 +6,19 @@ import {
 import { Hall } from '@prisma/client';
 import { CreateHallDto } from './dto/create-hall.dto';
 import { HallsRepository, HallWithSeats } from './halls.repository';
+import { ScreeningsCache } from './screenings.cache';
 
 @Injectable()
 export class HallsService {
-  constructor(private readonly hallsRepo: HallsRepository) {}
+  constructor(
+    private readonly hallsRepo: HallsRepository,
+    private readonly screeningsCache: ScreeningsCache,
+  ) {}
 
-  createHall(dto: CreateHallDto): Promise<HallWithSeats> {
-    return this.hallsRepo.createHallWithSeats(dto);
+  async createHall(dto: CreateHallDto): Promise<HallWithSeats> {
+    const hall = await this.hallsRepo.createHallWithSeats(dto);
+    await this.screeningsCache.delHalls();
+    return hall;
   }
 
   async getHall(id: number): Promise<HallWithSeats> {
@@ -23,8 +29,14 @@ export class HallsService {
     return hall;
   }
 
-  listHalls(): Promise<Hall[]> {
-    return this.hallsRepo.listHalls();
+  async listHalls(): Promise<Hall[]> {
+    const cached = await this.screeningsCache.getHalls();
+    if (cached) {
+      return cached;
+    }
+    const halls = await this.hallsRepo.listHalls();
+    await this.screeningsCache.setHalls(halls);
+    return halls;
   }
 
   async deleteHall(id: number): Promise<Hall> {
@@ -37,6 +49,8 @@ export class HallsService {
         'Cannot delete a hall with existing reservations',
       );
     }
-    return this.hallsRepo.deleteHall(id);
+    const deleted = await this.hallsRepo.deleteHall(id);
+    await this.screeningsCache.delHalls();
+    return deleted;
   }
 }

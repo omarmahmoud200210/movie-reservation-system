@@ -18,30 +18,30 @@ let AuthRepository = class AuthRepository {
         this.prisma = prisma;
     }
     findByEmail(email) {
-        return this.prisma.user.findUnique({ where: { email } });
+        return this.prisma.read.user.findUnique({ where: { email } });
     }
     findById(id) {
-        return this.prisma.user.findUnique({ where: { id } });
+        return this.prisma.read.user.findUnique({ where: { id } });
     }
     findByGoogleId(googleId) {
-        return this.prisma.user.findUnique({ where: { googleId } });
+        return this.prisma.read.user.findUnique({ where: { googleId } });
     }
     createUser(data) {
-        return this.prisma.user.create({ data });
+        return this.prisma.write.user.create({ data });
     }
     createGoogleUser(data) {
-        return this.prisma.user.create({
+        return this.prisma.write.user.create({
             data: { ...data, emailVerified: true },
         });
     }
     setGoogleId(userId, googleId) {
-        return this.prisma.user.update({
+        return this.prisma.write.user.update({
             where: { id: userId },
             data: { googleId },
         });
     }
     markEmailVerified(id) {
-        return this.prisma.user.update({
+        return this.prisma.write.user.update({
             where: { id },
             data: { emailVerified: true },
             select: { id: true, name: true, email: true, emailVerified: true, role: true, googleId: true, createdAt: true, updatedAt: true },

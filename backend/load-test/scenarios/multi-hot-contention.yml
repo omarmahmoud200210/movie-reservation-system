@@ -23,5 +23,5 @@ scenarios:
             screeningId: "{{ screeningId }}"
             seatId: "{{ hotSeatId }}"
           expect:
-            - statusCode: [201, 409]
+            - statusCode: [201, 409, 503]
           afterResponse: "logContentionResult"

@@ -8,7 +8,7 @@ export class IpRateLimitMiddleware implements NestMiddleware {
     string,
     { points: number; duration: number; key: string }
   > = {
-    'POST /auth/login':      { points: 5,  duration: 15 * 60_000, key: 'auth:login' },
+    'POST /auth/login':      { points: Number(process.env.LOGIN_RATE_LIMIT) || 5,  duration: 15 * 60_000, key: 'auth:login' },
     'GET /movies':           { points: 60, duration: 60_000,      key: 'movies:browse' },
     'POST /auth/register':   { points: 3,  duration: 60_000,      key: 'auth:register' },
     'POST /auth/verify-otp': { points: 10, duration: 60_000,      key: 'auth:verify-otp' },
