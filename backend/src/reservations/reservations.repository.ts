@@ -40,7 +40,7 @@ export class ReservationsRepository {
   holdSeat(params: HoldSeatParams): Promise<Reservation> {
     const { userId, screeningId, hallId, seatId, heldUntil } = params;
 
-    return this.prisma.write.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx) => {
       try {
         const locked = await tx.$queryRaw<Array<{ id: number }>>(Prisma.sql`
           SELECT id FROM "seat"
@@ -112,7 +112,7 @@ export class ReservationsRepository {
 
   /** Pushes heldUntil out — used when a checkout session outlives the normal hold window. */
   extendHold(id: number, until: Date): Promise<Reservation> {
-    return this.prisma.write.reservation.update({
+    return this.prisma.reservation.update({
       where: { id },
       data: { heldUntil: until },
     });
@@ -120,7 +120,7 @@ export class ReservationsRepository {
 
   /** HELD -> CONFIRMED on successful payment; heldUntil no longer applies. */
   confirm(id: number): Promise<Reservation> {
-    return this.prisma.write.reservation.update({
+    return this.prisma.reservation.update({
       where: { id },
       data: { status: ReservationStatus.CONFIRMED, heldUntil: null },
     });
@@ -134,7 +134,7 @@ export class ReservationsRepository {
    * same reason: Prisma's query builder can't express this.
    */
   releaseExpiredHolds(now: Date): Promise<ExpiredHold[]> {
-    return this.prisma.write.$queryRaw<ExpiredHold[]>(Prisma.sql`
+    return this.prisma.$queryRaw<ExpiredHold[]>(Prisma.sql`
       UPDATE "reservation"
       SET status = 'CANCELLED', "heldUntil" = NULL, "updatedAt" = ${now}
       WHERE status = 'HELD' AND "heldUntil" < ${now}
@@ -143,15 +143,18 @@ export class ReservationsRepository {
   }
 
   findById(id: number): Promise<Reservation | null> {
-    return this.prisma.read.reservation.findUnique({ where: { id } });
+    return this.prisma.reservation.findUnique({ where: { id } });
   }
 
   setStatus(id: number, status: ReservationStatus): Promise<Reservation> {
-    return this.prisma.write.reservation.update({ where: { id }, data: { status } });
+    return this.prisma.reservation.update({
+      where: { id },
+      data: { status },
+    });
   }
 
   findByUser(userId: number) {
-    return this.prisma.read.reservation.findMany({
+    return this.prisma.reservation.findMany({
       where: { userId },
       include: {
         seat: true,

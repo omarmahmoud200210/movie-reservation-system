@@ -4,11 +4,7 @@ import {
   ConflictException,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  ReservationStatus,
-  ScreenStatus,
-  SeatStatus,
-} from '@prisma/client';
+import { ReservationStatus, ScreenStatus, SeatStatus } from '@prisma/client';
 import { ScreeningsService } from '../screenings.service';
 import { ScreeningsRepository } from '../screenings.repository';
 import { ScreeningsCache } from '../screenings.cache';
@@ -323,7 +319,9 @@ describe('ScreeningsService', () => {
       mockScreeningsRepo.findById.mockResolvedValue(existing);
 
       await expect(service.getScreeningDetail(10)).resolves.toBe(existing);
-      expect(mockScreeningsCache.setScreeningDetail).toHaveBeenCalledWith(existing);
+      expect(mockScreeningsCache.setScreeningDetail).toHaveBeenCalledWith(
+        existing,
+      );
     });
 
     it('serves from cache on a hit without querying the DB', async () => {
@@ -374,7 +372,10 @@ describe('ScreeningsService', () => {
       );
 
       await expect(service.getMovieScreenings(1)).resolves.toBe(screenings);
-      expect(mockScreeningsCache.setMovieScreenings).toHaveBeenCalledWith(1, screenings);
+      expect(mockScreeningsCache.setMovieScreenings).toHaveBeenCalledWith(
+        1,
+        screenings,
+      );
     });
 
     it('serves from cache on a hit without DB queries', async () => {
@@ -383,7 +384,9 @@ describe('ScreeningsService', () => {
 
       await expect(service.getMovieScreenings(1)).resolves.toBe(cached);
       expect(mockMoviesRepo.findPublishedById).not.toHaveBeenCalled();
-      expect(mockScreeningsRepo.findFutureScheduledByMovie).not.toHaveBeenCalled();
+      expect(
+        mockScreeningsRepo.findFutureScheduledByMovie,
+      ).not.toHaveBeenCalled();
     });
 
     it('throws 404 for a draft/unknown movie and never queries screenings', async () => {
@@ -440,7 +443,9 @@ describe('ScreeningsService', () => {
       await service.getSeatMap(10);
 
       expect(mockScreeningsRepo.findSeatsByHall).toHaveBeenCalledWith(2);
-      expect(mockScreeningsRepo.findActiveReservations).toHaveBeenCalledWith(10);
+      expect(mockScreeningsRepo.findActiveReservations).toHaveBeenCalledWith(
+        10,
+      );
     });
 
     it('throws 404 for a cancelled screening without fetching seats', async () => {

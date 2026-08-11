@@ -1,12 +1,14 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import RedisCache from '../redis/redis.cache';
+import { randomInt } from 'crypto';
+import { authEnv } from './auth-env.config';
 
 @Injectable()
 export class OtpService {
   constructor(private readonly redis: RedisCache) {}
 
   private gen(): string {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+    return randomInt(100000, 999999).toString();
   }
 
   async issue(email: string): Promise<string> {
@@ -17,18 +19,13 @@ export class OtpService {
       );
     }
     const code = this.gen();
-    const ttl = Number(process.env.OTP_TTL_SECONDS);
+    const ttl = authEnv.otpTtlSeconds;
     // These three writes are independent, so batch them into one round-trip.
     await this.redis
       .pipeline()
       .set(`otp:${email}`, code, 'EX', ttl)
       .del(`otp_attempts:${email}`)
-      .set(
-        cooldownKey,
-        '1',
-        'EX',
-        Number(process.env.OTP_RESEND_COOLDOWN_SECONDS),
-      )
+      .set(cooldownKey, '1', 'EX', authEnv.otpResendCooldownSeconds)
       .exec();
     return code;
   }
@@ -38,12 +35,18 @@ export class OtpService {
     const stored = await this.redis.get(key);
     if (!stored) throw new BadRequestException('Code expired or not found');
 
-    const attempts = await this.redis.incr(`otp_attempts:${email}`);
-    if (attempts > Number(process.env.OTP_MAX_ATTEMPTS)) {
+    const pipeline = this.redis.pipeline();
+    pipeline.incr(`otp_attempts:${email}`);
+    pipeline.expire(`otp_attempts:${email}`, authEnv.otpTtlSeconds);
+
+    const result = (await pipeline.exec()) as [Error | null, number][];
+    const attempts = result[0][1];
+
+    if (attempts > authEnv.otpMaxAttempts) {
       await this.redis.del(key);
       throw new BadRequestException('Too many attempts, request a new code');
     }
-    
+
     if (stored !== code) return false;
 
     await this.redis.del(key);

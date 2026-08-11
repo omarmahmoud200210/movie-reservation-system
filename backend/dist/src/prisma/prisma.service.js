@@ -14,43 +14,27 @@ const common_1 = require("@nestjs/common");
 const client_1 = require("@prisma/client");
 const adapter_pg_1 = require("@prisma/adapter-pg");
 const pg_1 = require("pg");
-let PrismaService = class PrismaService {
-    read;
-    write;
-    readPool;
-    writePool;
+let PrismaService = class PrismaService extends client_1.PrismaClient {
+    pool;
     constructor() {
-        const sharedConfig = {
+        const pool = new pg_1.Pool({
+            connectionString: process.env.DATABASE_URL,
+            max: 20,
             idleTimeoutMillis: 30000,
             connectionTimeoutMillis: 5000,
             ...(process.env.NODE_ENV === 'production' && {
                 ssl: { rejectUnauthorized: true },
             }),
-        };
-        this.readPool = new pg_1.Pool({
-            connectionString: process.env.DATABASE_URL,
-            max: 15,
-            min: 2,
-            ...sharedConfig,
         });
-        this.writePool = new pg_1.Pool({
-            connectionString: process.env.DATABASE_URL,
-            max: 4,
-            min: 1,
-            ...sharedConfig,
-        });
-        this.read = new client_1.PrismaClient({ adapter: new adapter_pg_1.PrismaPg(this.readPool) });
-        this.write = new client_1.PrismaClient({ adapter: new adapter_pg_1.PrismaPg(this.writePool) });
+        super({ adapter: new adapter_pg_1.PrismaPg(pool) });
+        this.pool = pool;
     }
     async onModuleInit() {
-        await this.read.$connect();
-        await this.write.$connect();
+        await this.$connect();
     }
     async onModuleDestroy() {
-        await this.read.$disconnect();
-        await this.write.$disconnect();
-        await this.readPool.end();
-        await this.writePool.end();
+        await this.$disconnect();
+        await this.pool.end();
     }
 };
 exports.PrismaService = PrismaService;

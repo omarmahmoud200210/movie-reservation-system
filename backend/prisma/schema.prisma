@@ -45,15 +45,15 @@ enum MovieStatus {
 }
 
 model User {
-  id                Int      @id @default(autoincrement())
+  id                Int         @id @default(autoincrement())
   name              String
-  email             String   @unique
+  email             String      @unique
   password          String?
-  emailVerified     Boolean  @default(false)
-  googleId          String?  @unique
-  role              UserRole @default(USER)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  emailVerified     Boolean     @default(false)
+  googleId          String?     @unique
+  role              UserRole    @default(USER)
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
 
   reservations      Reservation[]
 
@@ -109,6 +109,8 @@ model Screening {
 
   @@index([movieId])
   @@index([startTime])
+  @@index([hallId, status])
+  @@index([movieId, status, startTime])
   @@map("screening")
 }
 
@@ -129,22 +131,23 @@ model Seat {
 }
 
 model Reservation {
-  id          Int       @id @default(autoincrement())
-  screeningId    Int
-  seatId      Int
-  userId      Int
-  status      ReservationStatus @default(HELD)
-  heldUntil  DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              Int       @id @default(autoincrement())
+  screeningId     Int
+  seatId          Int
+  userId          Int
+  status          ReservationStatus @default(HELD)
+  heldUntil       DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
   screen      Screening @relation(fields: [screeningId], references: [id], onDelete: Cascade)
   seat        Seat @relation(fields: [seatId], references: [id], onDelete: Cascade)
   payment     Payment?
 
-  @@index([userId])
-  @@index([screeningId])
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([screeningId, status, seatId])
+  @@index([status, heldUntil])
   @@index([seatId])
   @@map("reservation")
 }
@@ -155,7 +158,7 @@ model Payment {
   amount            Int
   currency          String
   status            PaymentStatus @default(PENDING)
-  stripePaymentId   String?
+  stripePaymentId   String? @unique
   stripeSessionId   String
   stripeEventId     String? @unique  
   refundId          String?
@@ -168,6 +171,8 @@ model Payment {
   updatedAt         DateTime @updatedAt
 
   reservation      Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt(sort: Desc)])
 
   @@map("payment")
 }
@@ -188,3 +193,4 @@ model RefundPolicy {
   -- 24-48hrs → 50% refund 
   -- <24hrs  → no refund (0%)
 */
+

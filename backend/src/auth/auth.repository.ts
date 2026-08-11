@@ -7,19 +7,19 @@ export class AuthRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   findByEmail(email: string): Promise<User | null> {
-    return this.prisma.read.user.findUnique({ where: { email } });
+    return this.prisma.user.findUnique({ where: { email } });
   }
 
   findById(id: number): Promise<User | null> {
-    return this.prisma.read.user.findUnique({ where: { id } });
+    return this.prisma.user.findUnique({ where: { id } });
   }
 
   findByGoogleId(googleId: string): Promise<User | null> {
-    return this.prisma.read.user.findUnique({ where: { googleId } });
+    return this.prisma.user.findUnique({ where: { googleId } });
   }
 
   createUser(data: Prisma.UserCreateInput): Promise<User> {
-    return this.prisma.write.user.create({ data });
+    return this.prisma.user.create({ data });
   }
 
   createGoogleUser(data: {
@@ -27,23 +27,32 @@ export class AuthRepository {
     email: string;
     googleId: string;
   }): Promise<User> {
-    return this.prisma.write.user.create({
+    return this.prisma.user.create({
       data: { ...data, emailVerified: true },
     });
   }
 
   setGoogleId(userId: number, googleId: string): Promise<User> {
-    return this.prisma.write.user.update({
+    return this.prisma.user.update({
       where: { id: userId },
       data: { googleId },
     });
   }
 
   markEmailVerified(id: number): Promise<Omit<User, 'password'>> {
-    return this.prisma.write.user.update({
+    return this.prisma.user.update({
       where: { id },
       data: { emailVerified: true },
-      select: { id: true, name: true, email: true, emailVerified: true, role: true, googleId: true, createdAt: true, updatedAt: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        emailVerified: true,
+        role: true,
+        googleId: true,
+        createdAt: true,
+        updatedAt: true,
+      },
     });
   }
 }

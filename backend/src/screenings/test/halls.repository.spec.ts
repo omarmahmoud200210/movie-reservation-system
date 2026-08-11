@@ -70,7 +70,11 @@ describe('HallsRepository', () => {
     });
 
     it('derives capacity = rows * seatsPerRow', async () => {
-      await repo.createHallWithSeats({ name: 'Hall 1', rows: 8, seatsPerRow: 12 });
+      await repo.createHallWithSeats({
+        name: 'Hall 1',
+        rows: 8,
+        seatsPerRow: 12,
+      });
 
       expect(tx.hall.create).toHaveBeenCalledWith({
         data: { name: 'Hall 1', capacity: 96 },
@@ -78,24 +82,47 @@ describe('HallsRepository', () => {
     });
 
     it('generates one seat per grid cell (8 x 12 -> 96 seats)', async () => {
-      await repo.createHallWithSeats({ name: 'Hall 1', rows: 8, seatsPerRow: 12 });
+      await repo.createHallWithSeats({
+        name: 'Hall 1',
+        rows: 8,
+        seatsPerRow: 12,
+      });
 
       expect(seatsFromCreateMany()).toHaveLength(96);
     });
 
     it('labels rows A..H for 8 rows', async () => {
-      await repo.createHallWithSeats({ name: 'Hall 1', rows: 8, seatsPerRow: 12 });
+      await repo.createHallWithSeats({
+        name: 'Hall 1',
+        rows: 8,
+        seatsPerRow: 12,
+      });
 
       const rows = [...new Set(seatsFromCreateMany().map((s) => s.row))];
       expect(rows).toEqual(['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']);
     });
 
     it('stores seat numbers as strings "1".."N"', async () => {
-      await repo.createHallWithSeats({ name: 'Hall 1', rows: 1, seatsPerRow: 12 });
+      await repo.createHallWithSeats({
+        name: 'Hall 1',
+        rows: 1,
+        seatsPerRow: 12,
+      });
 
       const numbers = seatsFromCreateMany().map((s) => s.number);
       expect(numbers).toEqual([
-        '1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12',
+        '1',
+        '2',
+        '3',
+        '4',
+        '5',
+        '6',
+        '7',
+        '8',
+        '9',
+        '10',
+        '11',
+        '12',
       ]);
       numbers.forEach((n) => expect(typeof n).toBe('string'));
     });
@@ -130,7 +157,11 @@ describe('HallsRepository', () => {
     });
 
     it('does all writes inside a single transaction (atomic rollback)', async () => {
-      await repo.createHallWithSeats({ name: 'Hall 1', rows: 2, seatsPerRow: 2 });
+      await repo.createHallWithSeats({
+        name: 'Hall 1',
+        rows: 2,
+        seatsPerRow: 2,
+      });
 
       expect(mockPrisma.write.$transaction).toHaveBeenCalledTimes(1);
       // Work runs on the tx client, never the root prisma client.
@@ -189,7 +220,9 @@ describe('HallsRepository', () => {
 
       await repo.deleteHall(1);
 
-      expect(mockPrisma.write.hall.delete).toHaveBeenCalledWith({ where: { id: 1 } });
+      expect(mockPrisma.write.hall.delete).toHaveBeenCalledWith({
+        where: { id: 1 },
+      });
     });
   });
 

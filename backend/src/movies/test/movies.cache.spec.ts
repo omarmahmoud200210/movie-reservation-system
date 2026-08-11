@@ -99,7 +99,9 @@ describe('MoviesCache', () => {
 
     it('treats a missing key as a miss (null)', async () => {
       mockRedis.get.mockImplementation((key: string) =>
-        Promise.resolve(key === 'movies:now_showing' ? JSON.stringify([]) : null),
+        Promise.resolve(
+          key === 'movies:now_showing' ? JSON.stringify([]) : null,
+        ),
       );
 
       await expect(cache.getLists()).resolves.toBeNull();

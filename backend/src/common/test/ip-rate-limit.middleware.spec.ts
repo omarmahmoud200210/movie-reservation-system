@@ -34,9 +34,7 @@ describe('IpRateLimitMiddleware', () => {
     }).compile();
 
     middleware = module.get<IpRateLimitMiddleware>(IpRateLimitMiddleware);
-    mockRateLimiterService = module.get(
-      RateLimiterService,
-    ) as jest.Mocked<RateLimiterService>;
+    mockRateLimiterService = module.get(RateLimiterService);
   });
 
   afterEach(() => {
@@ -46,11 +44,7 @@ describe('IpRateLimitMiddleware', () => {
   it('calls next() without calling rateLimiter for an unmatched route', async () => {
     const req = buildReq('GET', '/auth/login');
 
-    await middleware.use(
-      req,
-      mockRes as unknown as Response,
-      mockNext as unknown as NextFunction,
-    );
+    await middleware.use(req, mockRes as unknown as Response, mockNext);
 
     expect(mockRateLimiterService.rateLimiter).not.toHaveBeenCalled();
     expect(mockNext).toHaveBeenCalledTimes(1);
@@ -64,11 +58,7 @@ describe('IpRateLimitMiddleware', () => {
       resetAfterMs: 800_000,
     });
 
-    await middleware.use(
-      req,
-      mockRes as unknown as Response,
-      mockNext as unknown as NextFunction,
-    );
+    await middleware.use(req, mockRes as unknown as Response, mockNext);
 
     expect(mockRateLimiterService.rateLimiter).toHaveBeenCalledWith(
       'rate_limit:ip:1.2.3.4:auth:login',
@@ -86,11 +76,7 @@ describe('IpRateLimitMiddleware', () => {
       resetAfterMs: 55_000,
     });
 
-    await middleware.use(
-      req,
-      mockRes as unknown as Response,
-      mockNext as unknown as NextFunction,
-    );
+    await middleware.use(req, mockRes as unknown as Response, mockNext);
 
     expect(mockRateLimiterService.rateLimiter).toHaveBeenCalledWith(
       'rate_limit:ip:1.2.3.4:movies:browse',
@@ -107,11 +93,7 @@ describe('IpRateLimitMiddleware', () => {
       resetAfterMs: 12_500,
     });
 
-    await middleware.use(
-      req,
-      mockRes as unknown as Response,
-      mockNext as unknown as NextFunction,
-    );
+    await middleware.use(req, mockRes as unknown as Response, mockNext);
 
     expect(mockRes.setHeader).toHaveBeenCalledWith('Retry-After', 13);
     expect(mockRes.status).toHaveBeenCalledWith(429);

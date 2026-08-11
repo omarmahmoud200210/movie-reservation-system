@@ -1,11 +1,12 @@
 import { JwtService } from '@nestjs/jwt';
 import type { Response } from 'express';
 import RedisCache from '../redis/redis.cache';
+import type { UserRole } from '@prisma/client';
 export interface AuthUser {
     id: number;
     name: string;
     email: string;
-    role: string;
+    role: UserRole;
 }
 interface AccessPayload {
     sub: number;
@@ -25,6 +26,7 @@ export declare class TokenService {
     private signAccess;
     private signRefresh;
     private refreshKey;
+    private sessionSetKey;
     issueAuthCookies(res: Response, user: AuthUser): Promise<void>;
     rotateAuthCookies(res: Response, payload: {
         id: number;

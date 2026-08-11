@@ -15,7 +15,9 @@ const mockService = {
 };
 
 const mockRateLimiterService = {
-  rateLimiter: jest.fn().mockResolvedValue({ allowed: true, remaining: 2, resetAfterMs: 60000 }),
+  rateLimiter: jest
+    .fn()
+    .mockResolvedValue({ allowed: true, remaining: 2, resetAfterMs: 60000 }),
 };
 
 const GUARDS_METADATA = '__guards__';
@@ -110,7 +112,11 @@ describe('UsersController', () => {
         RATE_LIMIT_KEY,
         UsersController.prototype.updateName,
       );
-      expect(meta).toEqual({ points: 10, duration: 3_600_000, key: 'users:name' });
+      expect(meta).toEqual({
+        points: 10,
+        duration: 3_600_000,
+        key: 'users:name',
+      });
     });
 
     it('requestEmailChange has users:email-request rate limit metadata', () => {
@@ -118,7 +124,11 @@ describe('UsersController', () => {
         RATE_LIMIT_KEY,
         UsersController.prototype.requestEmailChange,
       );
-      expect(meta).toEqual({ points: 10, duration: 3_600_000, key: 'users:email-request' });
+      expect(meta).toEqual({
+        points: 10,
+        duration: 3_600_000,
+        key: 'users:email-request',
+      });
     });
 
     it('confirmEmailChange has users:email-confirm rate limit metadata', () => {
@@ -126,7 +136,11 @@ describe('UsersController', () => {
         RATE_LIMIT_KEY,
         UsersController.prototype.confirmEmailChange,
       );
-      expect(meta).toEqual({ points: 10, duration: 3_600_000, key: 'users:email-confirm' });
+      expect(meta).toEqual({
+        points: 10,
+        duration: 3_600_000,
+        key: 'users:email-confirm',
+      });
     });
 
     it('getPendingEmailChange has users:email-pending rate limit metadata', () => {
@@ -134,7 +148,11 @@ describe('UsersController', () => {
         RATE_LIMIT_KEY,
         UsersController.prototype.getPendingEmailChange,
       );
-      expect(meta).toEqual({ points: 10, duration: 3_600_000, key: 'users:email-pending' });
+      expect(meta).toEqual({
+        points: 10,
+        duration: 3_600_000,
+        key: 'users:email-pending',
+      });
     });
 
     it('changePassword has users:password rate limit metadata', () => {
@@ -142,7 +160,11 @@ describe('UsersController', () => {
         RATE_LIMIT_KEY,
         UsersController.prototype.changePassword,
       );
-      expect(meta).toEqual({ points: 10, duration: 3_600_000, key: 'users:password' });
+      expect(meta).toEqual({
+        points: 10,
+        duration: 3_600_000,
+        key: 'users:password',
+      });
     });
   });
 });

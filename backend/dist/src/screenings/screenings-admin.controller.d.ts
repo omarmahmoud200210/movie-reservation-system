@@ -8,43 +8,43 @@ export declare class ScreeningsAdminController {
     private readonly audit;
     constructor(screeningsService: ScreeningsService, audit: AuditService);
     create(dto: CreateScreeningDto, user: AuthUser): Promise<{
+        id: number;
         createdAt: Date;
         updatedAt: Date;
-        id: number;
         status: import("@prisma/client").$Enums.ScreenStatus;
-        startTime: Date;
-        price: number;
         hallId: number;
         movieId: number;
+        startTime: Date;
+        price: number;
     }>;
     update(id: number, dto: UpdateScreeningDto, user: AuthUser): Promise<{
+        id: number;
         createdAt: Date;
         updatedAt: Date;
-        id: number;
         status: import("@prisma/client").$Enums.ScreenStatus;
-        startTime: Date;
-        price: number;
         hallId: number;
         movieId: number;
+        startTime: Date;
+        price: number;
     }>;
     cancel(id: number, user: AuthUser): Promise<{
+        id: number;
         createdAt: Date;
         updatedAt: Date;
-        id: number;
         status: import("@prisma/client").$Enums.ScreenStatus;
-        startTime: Date;
-        price: number;
         hallId: number;
         movieId: number;
+        startTime: Date;
+        price: number;
     }>;
     remove(id: number, user: AuthUser): Promise<{
+        id: number;
         createdAt: Date;
         updatedAt: Date;
-        id: number;
         status: import("@prisma/client").$Enums.ScreenStatus;
-        startTime: Date;
-        price: number;
         hallId: number;
         movieId: number;
+        startTime: Date;
+        price: number;
     }>;
 }

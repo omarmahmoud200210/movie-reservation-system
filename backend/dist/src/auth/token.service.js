@@ -17,6 +17,7 @@ const common_1 = require("@nestjs/common");
 const jwt_1 = require("@nestjs/jwt");
 const crypto_1 = require("crypto");
 const redis_cache_1 = __importDefault(require("../redis/redis.cache"));
+const auth_env_config_1 = require("./auth-env.config");
 const ACCESS_MAX_AGE_MS = 15 * 60 * 1000;
 const REFRESH_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const REFRESH_TTL_SECONDS = 7 * 24 * 60 * 60;
@@ -28,6 +29,8 @@ if not exists then
 end
 redis.call('DEL', KEYS[1])
 redis.call('SET', ARGV[1], '1', 'EX', ARGV[2])
+redis.call('SREM', KEYS[2], ARGV[3])
+redis.call('SADD', KEYS[2], ARGV[4])
 return {1}
 `;
 let TokenService = class TokenService {
@@ -39,33 +42,50 @@ let TokenService = class TokenService {
     }
     async signAccess(user) {
         const ver = await this.getAccessVersion(user.id);
-        return this.jwt.sign({ sub: user.id, name: user.name, email: user.email, role: user.role, ver }, {
-            secret: process.env.JWT_ACCESS_SECRET,
-            expiresIn: process.env.JWT_ACCESS_EXPIRES_IN,
+        return this.jwt.sign({
+            sub: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            ver,
+        }, {
+            secret: auth_env_config_1.authEnv.jwtAccessSecret,
+            expiresIn: auth_env_config_1.authEnv.jwtAccessExpiresIn,
         });
     }
     signRefresh(user) {
         const jti = (0, crypto_1.randomUUID)();
         const token = this.jwt.sign({ sub: user.id, jti }, {
-            secret: process.env.JWT_REFRESH_SECRET,
-            expiresIn: process.env.JWT_REFRESH_EXPIRES_IN,
+            secret: auth_env_config_1.authEnv.jwtRefreshSecret,
+            expiresIn: auth_env_config_1.authEnv.jwtRefreshExpiresIn,
         });
         return { token, jti };
     }
     refreshKey(userId, jti) {
         return `refresh:${userId}:${jti}`;
     }
+    sessionSetKey(userId) {
+        return `refresh_sessions:${userId}`;
+    }
     async issueAuthCookies(res, user) {
         const access = await this.signAccess(user);
         const { token: refresh, jti } = this.signRefresh(user);
-        await this.redis.set(this.refreshKey(user.id, jti), '1', 'EX', REFRESH_TTL_SECONDS);
+        const client = this.redis.getClient();
+        await client
+            .multi()
+            .set(this.refreshKey(user.id, jti), '1', 'EX', REFRESH_TTL_SECONDS)
+            .sadd(this.sessionSetKey(user.id), jti)
+            .exec();
         this.setAuthCookies(res, access, refresh);
     }
     async rotateAuthCookies(res, payload, user) {
         const oldKey = this.refreshKey(payload.id, payload.jti);
         const { token: newRefresh, jti: newJti } = this.signRefresh(user);
         const newKey = this.refreshKey(user.id, newJti);
-        const result = await this.redis.getClient().eval(ROTATE_SCRIPT, 1, oldKey, newKey, String(REFRESH_TTL_SECONDS));
+        const setKey = this.sessionSetKey(user.id);
+        const result = (await this.redis
+            .getClient()
+            .eval(ROTATE_SCRIPT, 2, oldKey, setKey, newKey, String(REFRESH_TTL_SECONDS), payload.jti, newJti));
         if (result[0] === 0) {
             throw new common_1.UnauthorizedException('Refresh token revoked or expired');
         }
@@ -76,7 +96,13 @@ let TokenService = class TokenService {
         return `access_version:${userId}`;
     }
     async incrementAccessVersion(userId) {
-        await this.redis.incr(this.accessVersionKey(userId));
+        const key = this.accessVersionKey(userId);
+        await this.redis
+            .getClient()
+            .multi()
+            .incr(key)
+            .expire(key, REFRESH_TTL_SECONDS)
+            .exec();
     }
     async getAccessVersion(userId) {
         const val = await this.redis.get(this.accessVersionKey(userId));
@@ -84,7 +110,7 @@ let TokenService = class TokenService {
     }
     signLinkState(userId) {
         return this.jwt.sign({ sub: userId }, {
-            secret: process.env.LINK_STATE_SECRET,
+            secret: auth_env_config_1.authEnv.linkStateSecret,
             expiresIn: '10m',
         });
     }
@@ -94,7 +120,7 @@ let TokenService = class TokenService {
         }
         try {
             const payload = this.jwt.verify(token, {
-                secret: process.env.LINK_STATE_SECRET,
+                secret: auth_env_config_1.authEnv.linkStateSecret,
             });
             return { id: payload.sub };
         }
@@ -105,9 +131,9 @@ let TokenService = class TokenService {
     setAuthCookies(res, access, refresh) {
         const base = {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
+            secure: auth_env_config_1.authEnv.nodeEnv === 'production',
             sameSite: 'strict',
-            domain: process.env.COOKIE_DOMAIN,
+            domain: auth_env_config_1.authEnv.cookieDomain,
         };
         res.cookie('access_token', access, { ...base, maxAge: ACCESS_MAX_AGE_MS });
         res.cookie('refresh_token', refresh, {
@@ -117,14 +143,22 @@ let TokenService = class TokenService {
         });
     }
     clearAuthCookies(res) {
-        res.clearCookie('access_token');
-        res.clearCookie('refresh_token', { path: REFRESH_COOKIE_PATH });
+        const base = {
+            httpOnly: true,
+            secure: auth_env_config_1.authEnv.nodeEnv === 'production',
+            sameSite: 'strict',
+            domain: auth_env_config_1.authEnv.cookieDomain,
+        };
+        res.clearCookie('access_token', base);
+        res.clearCookie('refresh_token', { ...base, path: REFRESH_COOKIE_PATH });
     }
     async revokeAllSessions(userId) {
         const client = this.redis.getClient();
-        const keys = await client.keys(`refresh:${userId}:*`);
-        if (keys.length > 0) {
-            await client.del(...keys);
+        const setKey = this.sessionSetKey(userId);
+        const jtis = await client.smembers(setKey);
+        if (jtis.length > 0) {
+            const refreshKeys = jtis.map((jti) => this.refreshKey(userId, jti));
+            await client.del(...refreshKeys, setKey);
         }
     }
 };

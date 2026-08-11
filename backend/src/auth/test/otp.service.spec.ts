@@ -5,11 +5,19 @@ import { OtpService } from '../otp.service';
 import RedisCache from '../../redis/redis.cache';
 
 // Mocks...
+const mockPipeline = {
+  set: jest.fn().mockReturnThis(),
+  del: jest.fn().mockReturnThis(),
+  incr: jest.fn().mockReturnThis(),
+  expire: jest.fn().mockReturnThis(),
+  exec: jest.fn().mockResolvedValue([[null, 1]]),
+};
+
 const mockRedisCache = {
   get: jest.fn(),
   set: jest.fn(),
   del: jest.fn(),
-  pipeline: jest.fn().mockReturnThis(),
+  pipeline: jest.fn().mockReturnValue(mockPipeline),
   incr: jest.fn(),
 };
 
@@ -18,6 +26,12 @@ describe('OtpService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
+    mockRedisCache.pipeline.mockReturnValue(mockPipeline);
+    mockPipeline.set.mockReturnThis();
+    mockPipeline.del.mockReturnThis();
+    mockPipeline.incr.mockReturnThis();
+    mockPipeline.expire.mockReturnThis();
+    mockPipeline.exec.mockResolvedValue([[null, 1]]);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -39,15 +53,8 @@ describe('OtpService', () => {
 
   describe('Issue OTP', () => {
     it('should issue an OTP and set cooldown', async () => {
-      const email = '[EMAIL_ADDRESS]';
-      process.env.OTP_TTL_SECONDS = '600';
-      process.env.OTP_RESEND_COOLDOWN_SECONDS = '60';
+      const email = 'john@example.com';
       mockRedisCache.get.mockResolvedValue(null);
-      mockRedisCache.pipeline.mockImplementation(() => ({
-        set: jest.fn().mockReturnThis(),
-        del: jest.fn().mockReturnThis(),
-        exec: jest.fn().mockResolvedValue([null, null, null]),
-      }));
 
       const otp = await service.issue(email);
 
@@ -59,25 +66,25 @@ describe('OtpService', () => {
 
   describe('Verify OTP', () => {
     it('should verify OTP successfully', async () => {
-      const email = '[EMAIL_ADDRESS]';
+      const email = 'john@example.com';
       const code = '123456';
       mockRedisCache.get.mockResolvedValue(code);
-      mockRedisCache.incr.mockResolvedValue(1);
-      mockRedisCache.del.mockResolvedValue(1);
+      mockPipeline.exec.mockResolvedValue([[null, 1]]);
 
       const result = await service.verify(email, code);
 
       expect(result).toBe(true);
       expect(mockRedisCache.get).toHaveBeenCalledWith(`otp:${email}`);
-      expect(mockRedisCache.incr).toHaveBeenCalledWith(`otp_attempts:${email}`);
+      expect(mockPipeline.incr).toHaveBeenCalledWith(`otp_attempts:${email}`);
       expect(mockRedisCache.del).toHaveBeenCalledWith(`otp:${email}`);
       expect(mockRedisCache.del).toHaveBeenCalledWith(`otp_attempts:${email}`);
     });
 
     it('should return false for invalid OTP', async () => {
-      const email = '[EMAIL_ADDRESS]';
+      const email = 'john@example.com';
       const code = '123456';
       mockRedisCache.get.mockResolvedValue('654321');
+      mockPipeline.exec.mockResolvedValue([[null, 1]]);
 
       const result = await service.verify(email, code);
 
@@ -85,11 +92,10 @@ describe('OtpService', () => {
     });
 
     it('should throw error for too many attempts', async () => {
-      const email = '[EMAIL_ADDRESS]';
+      const email = 'john@example.com';
       const code = '123456';
-      process.env.OTP_MAX_ATTEMPTS = '5';
       mockRedisCache.get.mockResolvedValue(code);
-      mockRedisCache.incr.mockResolvedValue(6);
+      mockPipeline.exec.mockResolvedValue([[null, 6]]);
 
       await expect(service.verify(email, code)).rejects.toThrow(
         'Too many attempts',

@@ -1,54 +1,25 @@
 "use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
     var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
     if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
+};
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.AuthService = void 0;
 const common_1 = require("@nestjs/common");
-const bcrypt = __importStar(require("bcrypt"));
 const auth_repository_1 = require("./auth.repository");
 const otp_service_1 = require("./otp.service");
 const mailer_service_1 = require("../mailer/mailer.service");
 const audit_service_1 = require("../common/services/audit.service");
+const argon2_1 = __importDefault(require("argon2"));
+const client_1 = require("@prisma/client");
 let AuthService = class AuthService {
     repo;
     otp;
@@ -61,20 +32,33 @@ let AuthService = class AuthService {
         this.audit = audit;
     }
     async register(dto) {
-        const existing = await this.repo.findByEmail(dto.email);
-        if (existing) {
+        try {
+            const existing = await this.repo.findByEmail(dto.email);
+            if (existing) {
+                return { message: 'If eligible, a verification code was sent' };
+            }
+            const hash = await argon2_1.default.hash(dto.password);
+            const user = await this.repo.createUser({
+                name: dto.name,
+                email: dto.email,
+                password: hash,
+            });
+            const code = await this.otp.issue(user.email);
+            await this.mailer.sendOtpEmail(user.email, code);
+            await this.audit.record({
+                action: 'user.registered',
+                targetType: 'user',
+                targetId: user.id,
+            });
             return { message: 'If eligible, a verification code was sent' };
         }
-        const hash = await bcrypt.hash(dto.password, 10);
-        const user = await this.repo.createUser({
-            name: dto.name,
-            email: dto.email,
-            password: hash,
-        });
-        const code = await this.otp.issue(user.email);
-        await this.mailer.sendOtpEmail(user.email, code);
-        await this.audit.record({ action: 'user.registered', targetType: 'user', targetId: user.id });
-        return { message: 'If eligible, a verification code was sent' };
+        catch (err) {
+            if (err instanceof client_1.Prisma.PrismaClientKnownRequestError &&
+                err.code === 'P2002') {
+                return { message: 'If eligible, a verification code was sent' };
+            }
+            throw err;
+        }
     }
     async verifyOtp(dto) {
         const user = await this.repo.findByEmail(dto.email);
@@ -92,15 +76,19 @@ let AuthService = class AuthService {
         if (!user || !user.password) {
             throw new common_1.UnauthorizedException('Invalid email or password');
         }
-        const matches = await bcrypt.compare(password, user.password);
+        const matches = await argon2_1.default.verify(user.password, password);
         if (!matches) {
-            await this.audit.record({ action: 'login.failed', actorId: user.id, metadata: { reason: 'wrong_password' } });
+            await this.audit.record({
+                action: 'login.failed',
+                actorId: user.id,
+                metadata: { reason: 'wrong_password' },
+            });
             throw new common_1.UnauthorizedException('Invalid email or password');
         }
         if (!user.emailVerified) {
             throw new common_1.ForbiddenException('Email not verified');
         }
-        return user;
+        return { id: user.id, email: user.email, role: user.role, name: user.name };
     }
     async getAuthUser(id) {
         const user = await this.repo.findById(id);
@@ -110,13 +98,29 @@ let AuthService = class AuthService {
     }
     async resolveGoogleUser(p) {
         const byGoogle = await this.repo.findByGoogleId(p.googleId);
-        if (byGoogle)
-            return byGoogle;
+        if (byGoogle) {
+            await this.audit.record({
+                action: 'login.google.success',
+                actorId: byGoogle.id,
+            });
+            return {
+                id: byGoogle.id,
+                email: byGoogle.email,
+                role: byGoogle.role,
+                name: byGoogle.name,
+            };
+        }
         const byEmail = await this.repo.findByEmail(p.email);
         if (byEmail) {
             throw new common_1.ConflictException('An account with this email already exists. Log in with your password and link Google in settings.');
         }
-        return this.repo.createGoogleUser(p);
+        const user = await this.repo.createGoogleUser(p);
+        await this.audit.record({
+            action: 'user.google.created',
+            targetType: 'user',
+            targetId: user.id,
+        });
+        return { id: user.id, email: user.email, role: user.role, name: user.name };
     }
     async linkGoogle(userId, googleId) {
         const owner = await this.repo.findByGoogleId(googleId);
@@ -125,7 +129,14 @@ let AuthService = class AuthService {
                 return owner;
             throw new common_1.ConflictException('This Google account is already linked to another user');
         }
-        return this.repo.setGoogleId(userId, googleId);
+        const updated = await this.repo.setGoogleId(userId, googleId);
+        await this.audit.record({
+            action: 'user.google.linked',
+            actorId: userId,
+            targetType: 'user',
+            targetId: userId,
+        });
+        return updated;
     }
     async resendOtp(dto) {
         const user = await this.repo.findByEmail(dto.email);

@@ -19,32 +19,35 @@ let ScreeningsRepository = class ScreeningsRepository {
         this.prisma = prisma;
     }
     create(data) {
-        return this.prisma.write.screening.create({ data });
+        return this.prisma.screening.create({ data });
     }
     update(id, data) {
-        return this.prisma.write.screening.update({ where: { id }, data });
+        return this.prisma.screening.update({ where: { id }, data });
     }
     findById(id) {
-        return this.prisma.read.screening.findUnique({
+        return this.prisma.screening.findUnique({
             where: { id },
             include: { movie: true, hall: true },
         });
     }
     setStatus(id, status) {
-        return this.prisma.write.screening.update({ where: { id }, data: { status } });
+        return this.prisma.screening.update({
+            where: { id },
+            data: { status },
+        });
     }
     delete(id) {
-        return this.prisma.write.screening.delete({ where: { id } });
+        return this.prisma.screening.delete({ where: { id } });
     }
     async hasReservations(screeningId) {
-        const reservation = await this.prisma.read.reservation.findFirst({
+        const reservation = await this.prisma.reservation.findFirst({
             where: { screeningId },
             select: { id: true },
         });
         return reservation !== null;
     }
     async findOverlapping(hallId, start, end, excludeId) {
-        const candidates = await this.prisma.read.screening.findMany({
+        const candidates = await this.prisma.screening.findMany({
             where: {
                 hallId,
                 status: { not: client_1.ScreenStatus.CANCELLED },
@@ -61,7 +64,7 @@ let ScreeningsRepository = class ScreeningsRepository {
         });
     }
     findFutureScheduledByMovie(movieId, now) {
-        return this.prisma.read.screening.findMany({
+        return this.prisma.screening.findMany({
             where: {
                 movieId,
                 status: client_1.ScreenStatus.SCHEDULED,
@@ -77,13 +80,13 @@ let ScreeningsRepository = class ScreeningsRepository {
         });
     }
     findSeatsByHall(hallId) {
-        return this.prisma.read.seat.findMany({
+        return this.prisma.seat.findMany({
             where: { hallId },
             orderBy: [{ row: 'asc' }, { id: 'asc' }],
         });
     }
     findActiveReservations(screeningId) {
-        return this.prisma.read.reservation.findMany({
+        return this.prisma.reservation.findMany({
             where: {
                 screeningId,
                 status: {

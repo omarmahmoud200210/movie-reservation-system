@@ -3,9 +3,12 @@ import { ConflictException } from '@nestjs/common';
 import type { Response } from 'express';
 
 // Modules...
+import { UserRole } from '@prisma/client';
 import { AuthController } from '../auth.controller';
 import { AuthService } from '../auth.service';
 import { TokenService } from '../token.service';
+import { AuditService } from '../../common/services/audit.service';
+import { authEnv } from '../auth-env.config';
 
 const mockAuthService = {
   register: jest.fn(),
@@ -24,17 +27,21 @@ const mockTokenService = {
   revokeAllSessions: jest.fn(),
 };
 
+const mockAuditService = {
+  record: jest.fn(),
+};
+
 const res = {} as Response;
 
 const user = {
   id: 1,
-  email: '[EMAIL_ADDRESS]',
+  email: 'john@example.com',
   name: 'John Doe',
-  role: 'USER',
+  role: UserRole.USER,
 };
 
 const RegisterDto = {
-  email: '[EMAIL_ADDRESS]',
+  email: 'john@example.com',
   password: '123',
   name: 'John Doe',
 };
@@ -50,6 +57,7 @@ describe('AuthController', () => {
       providers: [
         { provide: AuthService, useValue: mockAuthService },
         { provide: TokenService, useValue: mockTokenService },
+        { provide: AuditService, useValue: mockAuditService },
       ],
     }).compile();
 
@@ -155,7 +163,7 @@ describe('AuthController', () => {
         user,
       );
       expect(redirect).toHaveBeenCalledWith(
-        `${process.env.FRONTEND_URL}/auth/google/callback`,
+        `${authEnv.frontendUrl}/auth/google/callback`,
       );
     });
 
@@ -170,7 +178,7 @@ describe('AuthController', () => {
 
       expect(mockTokenService.issueAuthCookies).not.toHaveBeenCalled();
       expect(redirect).toHaveBeenCalledWith(
-        `${process.env.FRONTEND_URL}/login?error=account_exists`,
+        `${authEnv.frontendUrl}/login?error=account_exists`,
       );
     });
   });
@@ -205,7 +213,7 @@ describe('AuthController', () => {
         'google-123',
       );
       expect(redirect).toHaveBeenCalledWith(
-        `${process.env.FRONTEND_URL}/settings?linked=google`,
+        `${authEnv.frontendUrl}/settings?linked=google`,
       );
     });
 
@@ -220,7 +228,7 @@ describe('AuthController', () => {
       await controller.linkGoogleCallback(googleProfile, req, redirectRes);
 
       expect(redirect).toHaveBeenCalledWith(
-        `${process.env.FRONTEND_URL}/settings?error=google_already_linked`,
+        `${authEnv.frontendUrl}/settings?error=google_already_linked`,
       );
     });
   });

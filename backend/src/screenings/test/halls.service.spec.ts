@@ -66,13 +66,18 @@ describe('HallsService', () => {
     it('throws NotFoundException for an unknown id', async () => {
       mockRepo.findHallWithSeats.mockResolvedValue(null);
 
-      await expect(service.getHall(99)).rejects.toBeInstanceOf(NotFoundException);
+      await expect(service.getHall(99)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
     });
   });
 
   describe('listHalls', () => {
     it('returns cached halls without hitting the repository', async () => {
-      const halls = [{ id: 1, name: 'A', capacity: 10 }, { id: 2, name: 'B', capacity: 20 }];
+      const halls = [
+        { id: 1, name: 'A', capacity: 10 },
+        { id: 2, name: 'B', capacity: 20 },
+      ];
       mockScreeningsCache.getHalls.mockResolvedValue(halls);
 
       await expect(service.listHalls()).resolves.toBe(halls);

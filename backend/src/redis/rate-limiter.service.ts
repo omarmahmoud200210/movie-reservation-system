@@ -68,7 +68,11 @@ export default class RateLimiterService {
       member,
     );
 
-    const [allowedFlag, remaining, resetAfterMs] = result as [number, number, number];
+    const [allowedFlag, remaining, resetAfterMs] = result as [
+      number,
+      number,
+      number,
+    ];
 
     return {
       allowed: allowedFlag === 1,

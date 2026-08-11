@@ -26,12 +26,16 @@ const jwt_refresh_guard_1 = require("./guards/jwt-refresh.guard");
 const google_auth_guard_1 = require("./guards/google-auth.guard");
 const google_link_auth_guard_1 = require("./guards/google-link-auth.guard");
 const current_user_decorator_1 = require("./decorators/current-user.decorator");
+const auth_env_config_1 = require("./auth-env.config");
+const audit_service_1 = require("../common/services/audit.service");
 let AuthController = class AuthController {
     authService;
     tokenService;
-    constructor(authService, tokenService) {
+    audit;
+    constructor(authService, tokenService, audit) {
         this.authService = authService;
         this.tokenService = tokenService;
+        this.audit = audit;
     }
     register(dto) {
         return this.authService.register(dto);
@@ -44,23 +48,35 @@ let AuthController = class AuthController {
             role: user.role,
             name: user.name,
         });
-        return user;
+        return { id: user.id, email: user.email, role: user.role, name: user.name };
     }
     resendOtp(dto) {
         return this.authService.resendOtp(dto);
     }
     async login(_dto, user, res) {
         await this.tokenService.issueAuthCookies(res, user);
+        await this.audit.record({
+            action: 'login.success',
+            actorId: user.id,
+        });
         return user;
     }
     async refresh(user, res) {
         const fresh = await this.authService.getAuthUser(user.id);
         await this.tokenService.rotateAuthCookies(res, { id: user.id, jti: user.jti }, fresh);
+        await this.audit.record({
+            action: 'token.refreshed',
+            actorId: user.id,
+        });
         return { message: 'Token refreshed' };
     }
     async logout(user, res) {
         await this.tokenService.revokeAllSessions(user.id);
         this.tokenService.clearAuthCookies(res);
+        await this.audit.record({
+            action: 'user.logout',
+            actorId: user.id,
+        });
         return { message: 'Logged out' };
     }
     me(user) {
@@ -77,11 +93,11 @@ let AuthController = class AuthController {
                 role: user.role,
                 name: user.name,
             });
-            return res.redirect(`${process.env.FRONTEND_URL}/auth/google/callback`);
+            return res.redirect(`${auth_env_config_1.authEnv.frontendUrl}/auth/google/callback`);
         }
         catch (err) {
             if (err instanceof common_1.ConflictException) {
-                return res.redirect(`${process.env.FRONTEND_URL}/login?error=account_exists`);
+                return res.redirect(`${auth_env_config_1.authEnv.frontendUrl}/login?error=account_exists`);
             }
             throw err;
         }
@@ -93,11 +109,11 @@ let AuthController = class AuthController {
         const { id } = this.tokenService.verifyLinkState(query.state);
         try {
             await this.authService.linkGoogle(id, profile.googleId);
-            return res.redirect(`${process.env.FRONTEND_URL}/settings?linked=google`);
+            return res.redirect(`${auth_env_config_1.authEnv.frontendUrl}/settings?linked=google`);
         }
         catch (err) {
             if (err instanceof common_1.ConflictException) {
-                return res.redirect(`${process.env.FRONTEND_URL}/settings?error=google_already_linked`);
+                return res.redirect(`${auth_env_config_1.authEnv.frontendUrl}/settings?error=google_already_linked`);
             }
             throw err;
         }
@@ -203,6 +219,7 @@ __decorate([
 exports.AuthController = AuthController = __decorate([
     (0, common_1.Controller)('auth'),
     __metadata("design:paramtypes", [auth_service_1.AuthService,
-        token_service_1.TokenService])
+        token_service_1.TokenService,
+        audit_service_1.AuditService])
 ], AuthController);
 //# sourceMappingURL=auth.controller.js.map

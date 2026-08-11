@@ -29,7 +29,9 @@ const cron_module_1 = require("./cron/cron.module");
 const payments_module_1 = require("./payments/payments.module");
 let AppModule = class AppModule {
     configure(consumer) {
-        consumer.apply(ip_rate_limit_middleware_1.IpRateLimitMiddleware).forRoutes({ path: 'auth/login', method: common_1.RequestMethod.POST }, { path: 'movies', method: common_1.RequestMethod.GET }, { path: 'auth/register', method: common_1.RequestMethod.POST }, { path: 'auth/verify-otp', method: common_1.RequestMethod.POST }, { path: 'auth/resend-otp', method: common_1.RequestMethod.POST }, { path: 'auth/refresh', method: common_1.RequestMethod.POST });
+        consumer
+            .apply(ip_rate_limit_middleware_1.IpRateLimitMiddleware)
+            .forRoutes({ path: 'auth/login', method: common_1.RequestMethod.POST }, { path: 'movies', method: common_1.RequestMethod.GET }, { path: 'auth/register', method: common_1.RequestMethod.POST }, { path: 'auth/verify-otp', method: common_1.RequestMethod.POST }, { path: 'auth/resend-otp', method: common_1.RequestMethod.POST }, { path: 'auth/refresh', method: common_1.RequestMethod.POST });
     }
 };
 exports.AppModule = AppModule;

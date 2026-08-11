@@ -86,7 +86,9 @@ describe('MoviesRepository', () => {
 
     await repo.delete(1);
 
-    expect(mockPrisma.write.movie.delete).toHaveBeenCalledWith({ where: { id: 1 } });
+    expect(mockPrisma.write.movie.delete).toHaveBeenCalledWith({
+      where: { id: 1 },
+    });
   });
 
   it('listAll -> findMany ordered by createdAt desc', async () => {

@@ -5,6 +5,7 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { ROLES_KEY } from '../../common/decorators/roles.decorator';
 import { AuditService } from '../../common/services/audit.service';
+import { UserRole } from '@prisma/client';
 
 const mockService = {
   createMovie: jest.fn(),
@@ -19,7 +20,7 @@ const mockAuditService = {
   record: jest.fn(),
 };
 
-const user = { id: 1, email: 'admin@test.com', name: 'Admin', role: 'ADMIN' };
+const user = { id: 1, email: 'admin@test.com', name: 'Admin', role: UserRole.ADMIN };
 
 // Key Nest uses to store @UseGuards metadata.
 const GUARDS_METADATA = '__guards__';
@@ -103,7 +104,10 @@ describe('MoviesAdminController', () => {
   // accidentally left public.
   describe('guard wiring (class-level)', () => {
     it('guards the whole controller with JwtAuthGuard + RolesGuard', () => {
-      const guards = Reflect.getMetadata(GUARDS_METADATA, MoviesAdminController);
+      const guards = Reflect.getMetadata(
+        GUARDS_METADATA,
+        MoviesAdminController,
+      );
       expect(guards).toEqual([JwtAuthGuard, RolesGuard]);
     });
 

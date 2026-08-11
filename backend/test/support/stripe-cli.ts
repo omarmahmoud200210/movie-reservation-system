@@ -8,7 +8,8 @@ import { spawn, execFileSync } from 'child_process';
 // internally from the test's own 127.0.0.1 server address, apiKey comes from a gitignored local
 // file the developer controls, and paymentId is a DB-generated number — none of this is
 // user/network input, so there's no injection surface despite shell:true.
-const READY_LINE = /Ready! You are using Stripe API Version .* Your webhook signing secret is (whsec_\w+)/;
+const READY_LINE =
+  /Ready! You are using Stripe API Version .* Your webhook signing secret is (whsec_\w+)/;
 
 export interface WebhookRelay {
   webhookSecret: string;
@@ -27,13 +28,22 @@ export function startWebhookRelay(
   return new Promise((resolve, reject) => {
     const child = spawn(
       'stripe',
-      ['listen', '--forward-to', forwardToUrl, '--api-key', apiKey, '--skip-update'],
+      [
+        'listen',
+        '--forward-to',
+        forwardToUrl,
+        '--api-key',
+        apiKey,
+        '--skip-update',
+      ],
       { stdio: ['ignore', 'pipe', 'pipe'], shell: true },
     );
 
     const timer = setTimeout(() => {
       child.kill();
-      reject(new Error(`stripe listen did not become ready within ${timeoutMs}ms`));
+      reject(
+        new Error(`stripe listen did not become ready within ${timeoutMs}ms`),
+      );
     }, timeoutMs);
 
     let buffer = '';
@@ -65,7 +75,10 @@ export function startWebhookRelay(
  * real fixture objects (product/price/session) on the Stripe test account — verified empirically
  * that `--override checkout_session:metadata.paymentId=<id>` threads through to the relayed
  * event's data.object.metadata. */
-export function triggerCheckoutCompleted(paymentId: number, apiKey: string): void {
+export function triggerCheckoutCompleted(
+  paymentId: number,
+  apiKey: string,
+): void {
   execFileSync(
     'stripe',
     [

@@ -7,25 +7,17 @@ import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { ResendOtpDto } from './dto/resend-otp.dto';
 import { LoginDto } from './dto/login.dto';
 import type { RefreshUser } from './strategies/jwt-refresh.strategy';
-import type { GoogleProfile } from './strategies/google.strategy';
+import type { GoogleProfile } from './util/google.profile.util';
+import { AuditService } from '../common/services/audit.service';
 export declare class AuthController {
     private readonly authService;
     private readonly tokenService;
-    constructor(authService: AuthService, tokenService: TokenService);
+    private readonly audit;
+    constructor(authService: AuthService, tokenService: TokenService, audit: AuditService);
     register(dto: RegisterDto): Promise<{
         message: string;
     }>;
-    verifyOtp(dto: VerifyOtpDto, res: Response): Promise<Omit<{
-        name: string;
-        createdAt: Date;
-        updatedAt: Date;
-        id: number;
-        email: string;
-        password: string | null;
-        emailVerified: boolean;
-        googleId: string | null;
-        role: import("@prisma/client").$Enums.UserRole;
-    }, "password">>;
+    verifyOtp(dto: VerifyOtpDto, res: Response): Promise<AuthUser>;
     resendOtp(dto: ResendOtpDto): Promise<{
         message: string;
     }>;

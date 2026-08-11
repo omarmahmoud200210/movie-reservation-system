@@ -59,8 +59,18 @@ const mockMetrics = {
   paymentsRefunded: { inc: jest.fn() },
 };
 
-const screening = { id: 3, price: 50, startTime: new Date('2026-07-10T18:00:00.000Z') };
-const heldReservation = { id: 100, screeningId: 3, seatId: 11, status: ReservationStatus.HELD, userId: 7 };
+const screening = {
+  id: 3,
+  price: 50,
+  startTime: new Date('2026-07-10T18:00:00.000Z'),
+};
+const heldReservation = {
+  id: 100,
+  screeningId: 3,
+  seatId: 11,
+  status: ReservationStatus.HELD,
+  userId: 7,
+};
 
 describe('PaymentsService', () => {
   let service: PaymentsService;
@@ -79,11 +89,26 @@ describe('PaymentsService', () => {
         { provide: ScreeningsRepository, useValue: mockScreeningsRepo },
         { provide: PaymentAbuseService, useValue: mockPaymentAbuse },
         { provide: EventEmitter2, useValue: mockEvents },
-        { provide: getToken('payments_succeeded_total'), useValue: mockMetrics.paymentsSucceeded },
-        { provide: getToken('payments_failed_total'), useValue: mockMetrics.paymentsFailed },
-        { provide: getToken('payments_declined_total'), useValue: mockMetrics.paymentsDeclined },
-        { provide: getToken('payments_timed_out_total'), useValue: mockMetrics.paymentsTimedOut },
-        { provide: getToken('payments_refunded_total'), useValue: mockMetrics.paymentsRefunded },
+        {
+          provide: getToken('payments_succeeded_total'),
+          useValue: mockMetrics.paymentsSucceeded,
+        },
+        {
+          provide: getToken('payments_failed_total'),
+          useValue: mockMetrics.paymentsFailed,
+        },
+        {
+          provide: getToken('payments_declined_total'),
+          useValue: mockMetrics.paymentsDeclined,
+        },
+        {
+          provide: getToken('payments_timed_out_total'),
+          useValue: mockMetrics.paymentsTimedOut,
+        },
+        {
+          provide: getToken('payments_refunded_total'),
+          useValue: mockMetrics.paymentsRefunded,
+        },
         { provide: AuditService, useValue: mockAudit },
       ],
     }).compile();
@@ -122,8 +147,11 @@ describe('PaymentsService', () => {
           metadata: { paymentId: '1' },
         }),
       );
-      expect(mockPaymentsRepo.update).toHaveBeenCalledWith(1, { stripeSessionId: 'cs_123' });
-      const expiresAtSeconds = stripeMock.checkout.sessions.create.mock.calls[0][0].expires_at;
+      expect(mockPaymentsRepo.update).toHaveBeenCalledWith(1, {
+        stripeSessionId: 'cs_123',
+      });
+      const expiresAtSeconds =
+        stripeMock.checkout.sessions.create.mock.calls[0][0].expires_at;
       expect(mockReservationsService.extendHold).toHaveBeenCalledWith(
         100,
         new Date(expiresAtSeconds * 1000),
@@ -136,9 +164,9 @@ describe('PaymentsService', () => {
         status: ReservationStatus.CONFIRMED,
       });
 
-      await expect(service.createCheckoutSession(7, 100)).rejects.toBeInstanceOf(
-        ConflictException,
-      );
+      await expect(
+        service.createCheckoutSession(7, 100),
+      ).rejects.toBeInstanceOf(ConflictException);
       expect(mockPaymentsRepo.create).not.toHaveBeenCalled();
     });
 
@@ -146,19 +174,21 @@ describe('PaymentsService', () => {
       mockReservationsService.findOwned.mockResolvedValue(heldReservation);
       mockPaymentsRepo.findByReservationId.mockResolvedValue({ id: 1 });
 
-      await expect(service.createCheckoutSession(7, 100)).rejects.toBeInstanceOf(
-        ConflictException,
-      );
+      await expect(
+        service.createCheckoutSession(7, 100),
+      ).rejects.toBeInstanceOf(ConflictException);
       expect(mockPaymentsRepo.create).not.toHaveBeenCalled();
     });
 
     it('propagates the 404 from findOwned for a non-owned/missing reservation', async () => {
       const { NotFoundException } = require('@nestjs/common');
-      mockReservationsService.findOwned.mockRejectedValue(new NotFoundException());
-
-      await expect(service.createCheckoutSession(7, 999)).rejects.toBeInstanceOf(
-        NotFoundException,
+      mockReservationsService.findOwned.mockRejectedValue(
+        new NotFoundException(),
       );
+
+      await expect(
+        service.createCheckoutSession(7, 999),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
 
     it('throws 409 when the screening no longer exists', async () => {
@@ -166,9 +196,9 @@ describe('PaymentsService', () => {
       mockPaymentsRepo.findByReservationId.mockResolvedValue(null);
       mockScreeningsRepo.findById.mockResolvedValue(null);
 
-      await expect(service.createCheckoutSession(7, 100)).rejects.toBeInstanceOf(
-        ConflictException,
-      );
+      await expect(
+        service.createCheckoutSession(7, 100),
+      ).rejects.toBeInstanceOf(ConflictException);
       expect(mockPaymentsRepo.create).not.toHaveBeenCalled();
     });
 
@@ -180,7 +210,9 @@ describe('PaymentsService', () => {
       const stripeError = new Error('Stripe API is down');
       stripeMock.checkout.sessions.create.mockRejectedValue(stripeError);
 
-      await expect(service.createCheckoutSession(7, 100)).rejects.toThrow(stripeError);
+      await expect(service.createCheckoutSession(7, 100)).rejects.toThrow(
+        stripeError,
+      );
 
       expect(mockPaymentsRepo.delete).toHaveBeenCalledWith(1);
       expect(mockReservationsService.extendHold).not.toHaveBeenCalled();
@@ -190,15 +222,18 @@ describe('PaymentsService', () => {
       mockReservationsService.findOwned.mockResolvedValue(heldReservation);
       mockPaymentsRepo.findByReservationId.mockResolvedValue(null);
       mockScreeningsRepo.findById.mockResolvedValue(screening);
-      const p2002 = new Prisma.PrismaClientKnownRequestError('Unique constraint failed', {
-        code: 'P2002',
-        clientVersion: '5.0.0',
-      });
+      const p2002 = new Prisma.PrismaClientKnownRequestError(
+        'Unique constraint failed',
+        {
+          code: 'P2002',
+          clientVersion: '5.0.0',
+        },
+      );
       mockPaymentsRepo.create.mockRejectedValue(p2002);
 
-      await expect(service.createCheckoutSession(7, 100)).rejects.toBeInstanceOf(
-        ConflictException,
-      );
+      await expect(
+        service.createCheckoutSession(7, 100),
+      ).rejects.toBeInstanceOf(ConflictException);
       expect(stripeMock.checkout.sessions.create).not.toHaveBeenCalled();
     });
   });
@@ -220,7 +255,10 @@ describe('PaymentsService', () => {
     });
 
     it('no-ops on a duplicate stripeEventId', async () => {
-      stripeMock.webhooks.constructEvent.mockReturnValue({ id: 'evt_1', type: 'checkout.session.completed' });
+      stripeMock.webhooks.constructEvent.mockReturnValue({
+        id: 'evt_1',
+        type: 'checkout.session.completed',
+      });
       mockPaymentsRepo.findByStripeEventId.mockResolvedValue({ id: 1 });
 
       await service.handleWebhookEvent(rawBody, signature);
@@ -241,7 +279,10 @@ describe('PaymentsService', () => {
         },
       });
       mockPaymentsRepo.findByStripeEventId.mockResolvedValue(null);
-      mockPaymentsRepo.findById.mockResolvedValue({ id: 1, reservationId: 100 });
+      mockPaymentsRepo.findById.mockResolvedValue({
+        id: 1,
+        reservationId: 100,
+      });
       mockPaymentsRepo.update.mockResolvedValue({ id: 1, reservationId: 100 });
 
       await service.handleWebhookEvent(rawBody, signature);
@@ -267,12 +308,17 @@ describe('PaymentsService', () => {
         },
       });
       mockPaymentsRepo.findByStripeEventId.mockResolvedValue(null);
-      mockPaymentsRepo.findById.mockResolvedValue({ id: 1, reservationId: 100 });
-      mockReservationsService.confirmPayment.mockRejectedValue(new Error('db hiccup'));
-
-      await expect(service.handleWebhookEvent(rawBody, signature)).rejects.toThrow(
-        'db hiccup',
+      mockPaymentsRepo.findById.mockResolvedValue({
+        id: 1,
+        reservationId: 100,
+      });
+      mockReservationsService.confirmPayment.mockRejectedValue(
+        new Error('db hiccup'),
       );
+
+      await expect(
+        service.handleWebhookEvent(rawBody, signature),
+      ).rejects.toThrow('db hiccup');
 
       expect(mockPaymentsRepo.update).not.toHaveBeenCalled();
     });
@@ -282,7 +328,11 @@ describe('PaymentsService', () => {
         id: 'evt_2c',
         type: 'checkout.session.completed',
         data: {
-          object: { payment_status: 'paid', payment_intent: 'pi_1', metadata: { paymentId: '999' } },
+          object: {
+            payment_status: 'paid',
+            payment_intent: 'pi_1',
+            metadata: { paymentId: '999' },
+          },
         },
       });
       mockPaymentsRepo.findByStripeEventId.mockResolvedValue(null);
@@ -298,10 +348,15 @@ describe('PaymentsService', () => {
       stripeMock.webhooks.constructEvent.mockReturnValue({
         id: 'evt_3',
         type: 'checkout.session.completed',
-        data: { object: { payment_status: 'unpaid', metadata: { paymentId: '1' } } },
+        data: {
+          object: { payment_status: 'unpaid', metadata: { paymentId: '1' } },
+        },
       });
       mockPaymentsRepo.findByStripeEventId.mockResolvedValue(null);
-      mockPaymentsRepo.findById.mockResolvedValue({ id: 1, reservationId: 100 });
+      mockPaymentsRepo.findById.mockResolvedValue({
+        id: 1,
+        reservationId: 100,
+      });
 
       await service.handleWebhookEvent(rawBody, signature);
 
@@ -370,11 +425,15 @@ describe('PaymentsService', () => {
       stripeMock.webhooks.constructEvent.mockReturnValue({
         id: 'evt_7',
         type: 'charge.dispute.created',
-        data: { object: { payment_intent: 'pi_missing', reason: 'fraudulent' } },
+        data: {
+          object: { payment_intent: 'pi_missing', reason: 'fraudulent' },
+        },
       });
       mockPaymentsRepo.findByStripeEventId.mockResolvedValue(null);
       mockPaymentsRepo.findByStripePaymentId.mockResolvedValue(null);
-      const warnSpy = jest.spyOn((service as any).logger, 'warn').mockImplementation();
+      const warnSpy = jest
+        .spyOn((service as any).logger, 'warn')
+        .mockImplementation();
 
       await service.handleWebhookEvent(rawBody, signature);
 
@@ -397,7 +456,10 @@ describe('PaymentsService', () => {
         },
       });
       mockPaymentsRepo.findByStripeEventId.mockResolvedValue(null);
-      mockPaymentsRepo.findById.mockResolvedValue({ id: 1, reservationId: 100 });
+      mockPaymentsRepo.findById.mockResolvedValue({
+        id: 1,
+        reservationId: 100,
+      });
       mockPaymentsRepo.update.mockResolvedValue({ id: 1, reservationId: 100 });
       mockReservationsService.confirmPayment.mockResolvedValue(undefined);
 
@@ -518,7 +580,9 @@ describe('PaymentsService', () => {
       mockPaymentsRepo.findStuckTimedOut.mockResolvedValue([
         { id: 2, reservationId: 101, stripeSessionId: 'cs_2' },
       ]);
-      stripeMock.checkout.sessions.retrieve.mockResolvedValue({ payment_status: 'unpaid' });
+      stripeMock.checkout.sessions.retrieve.mockResolvedValue({
+        payment_status: 'unpaid',
+      });
       mockPaymentsRepo.declineWithReservation.mockResolvedValue({
         payment: { id: 2, reservationId: 101 },
         reservation: { id: 101, screeningId: 3, seatId: 12, userId: 7 },
@@ -531,8 +595,19 @@ describe('PaymentsService', () => {
   });
 
   describe('refundReservation', () => {
-    const confirmed = { id: 100, screeningId: 3, seatId: 11, status: ReservationStatus.CONFIRMED, userId: 7 };
-    const payment = { id: 1, reservationId: 100, amount: 5000, stripePaymentId: 'pi_1' };
+    const confirmed = {
+      id: 100,
+      screeningId: 3,
+      seatId: 11,
+      status: ReservationStatus.CONFIRMED,
+      userId: 7,
+    };
+    const payment = {
+      id: 1,
+      reservationId: 100,
+      amount: 5000,
+      stripePaymentId: 'pi_1',
+    };
 
     it('full refund (>=48h out): refunds via Stripe, sets REFUNDED, cancels the reservation', async () => {
       mockPaymentsRepo.findByReservationId.mockResolvedValue(payment);
@@ -540,9 +615,14 @@ describe('PaymentsService', () => {
         ...screening,
         startTime: new Date(Date.now() + 72 * 60 * 60_000),
       });
-      mockPaymentsRepo.findRefundPolicy.mockResolvedValue({ refundPercent: 100 });
+      mockPaymentsRepo.findRefundPolicy.mockResolvedValue({
+        refundPercent: 100,
+      });
       stripeMock.refunds.create.mockResolvedValue({ id: 're_1' });
-      mockReservationsService.finalizeCancel.mockResolvedValue({ ...confirmed, status: 'CANCELLED' });
+      mockReservationsService.finalizeCancel.mockResolvedValue({
+        ...confirmed,
+        status: 'CANCELLED',
+      });
 
       await service.refundReservation(confirmed as any);
 
@@ -558,7 +638,9 @@ describe('PaymentsService', () => {
         refundId: 're_1',
         refundedAt: expect.any(Date),
       });
-      expect(mockReservationsService.finalizeCancel).toHaveBeenCalledWith(confirmed);
+      expect(mockReservationsService.finalizeCancel).toHaveBeenCalledWith(
+        confirmed,
+      );
     });
 
     it('partial refund (50%-window): halves the amount, still passes an idempotency key', async () => {
@@ -567,9 +649,14 @@ describe('PaymentsService', () => {
         ...screening,
         startTime: new Date(Date.now() + 24 * 60 * 60_000),
       });
-      mockPaymentsRepo.findRefundPolicy.mockResolvedValue({ refundPercent: 50 });
+      mockPaymentsRepo.findRefundPolicy.mockResolvedValue({
+        refundPercent: 50,
+      });
       stripeMock.refunds.create.mockResolvedValue({ id: 're_2' });
-      mockReservationsService.finalizeCancel.mockResolvedValue({ ...confirmed, status: 'CANCELLED' });
+      mockReservationsService.finalizeCancel.mockResolvedValue({
+        ...confirmed,
+        status: 'CANCELLED',
+      });
 
       await service.refundReservation(confirmed as any);
 
@@ -592,13 +679,18 @@ describe('PaymentsService', () => {
         ...payment,
         status: PaymentStatus.REFUNDED,
       });
-      mockReservationsService.finalizeCancel.mockResolvedValue({ ...confirmed, status: 'CANCELLED' });
+      mockReservationsService.finalizeCancel.mockResolvedValue({
+        ...confirmed,
+        status: 'CANCELLED',
+      });
 
       const result = await service.refundReservation(confirmed as any);
 
       expect(stripeMock.refunds.create).not.toHaveBeenCalled();
       expect(mockPaymentsRepo.update).not.toHaveBeenCalled();
-      expect(mockReservationsService.finalizeCancel).toHaveBeenCalledWith(confirmed);
+      expect(mockReservationsService.finalizeCancel).toHaveBeenCalledWith(
+        confirmed,
+      );
       expect(result).toEqual({ ...confirmed, status: 'CANCELLED' });
     });
 
@@ -609,7 +701,10 @@ describe('PaymentsService', () => {
         startTime: new Date(Date.now() + 1 * 60 * 60_000),
       });
       mockPaymentsRepo.findRefundPolicy.mockResolvedValue({ refundPercent: 0 });
-      mockReservationsService.finalizeCancel.mockResolvedValue({ ...confirmed, status: 'CANCELLED' });
+      mockReservationsService.finalizeCancel.mockResolvedValue({
+        ...confirmed,
+        status: 'CANCELLED',
+      });
 
       await service.refundReservation(confirmed as any);
 
@@ -625,9 +720,9 @@ describe('PaymentsService', () => {
       const { NotFoundException } = require('@nestjs/common');
       mockPaymentsRepo.findByReservationId.mockResolvedValue(null);
 
-      await expect(service.refundReservation(confirmed as any)).rejects.toBeInstanceOf(
-        NotFoundException,
-      );
+      await expect(
+        service.refundReservation(confirmed as any),
+      ).rejects.toBeInstanceOf(NotFoundException);
     });
 
     it('increments payments_refunded_total on a real refund, not on the idempotent short-circuit', async () => {
@@ -639,9 +734,14 @@ describe('PaymentsService', () => {
         ...screening,
         startTime: new Date(Date.now() + 72 * 60 * 60_000),
       });
-      mockPaymentsRepo.findRefundPolicy.mockResolvedValue({ refundPercent: 100 });
+      mockPaymentsRepo.findRefundPolicy.mockResolvedValue({
+        refundPercent: 100,
+      });
       stripeMock.refunds.create.mockResolvedValue({ id: 're_1' });
-      mockReservationsService.finalizeCancel.mockResolvedValue({ ...confirmed, status: 'CANCELLED' });
+      mockReservationsService.finalizeCancel.mockResolvedValue({
+        ...confirmed,
+        status: 'CANCELLED',
+      });
 
       await service.refundReservation(confirmed as any);
 
@@ -652,7 +752,10 @@ describe('PaymentsService', () => {
         ...payment,
         status: PaymentStatus.REFUNDED,
       });
-      mockReservationsService.finalizeCancel.mockResolvedValue({ ...confirmed, status: 'CANCELLED' });
+      mockReservationsService.finalizeCancel.mockResolvedValue({
+        ...confirmed,
+        status: 'CANCELLED',
+      });
 
       await service.refundReservation(confirmed as any);
 

@@ -5,7 +5,6 @@ import {
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import * as bcrypt from 'bcrypt';
 import { User } from '@prisma/client';
 import { AuthRepository } from './auth.repository';
 import { OtpService } from './otp.service';
@@ -15,6 +14,8 @@ import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { ResendOtpDto } from './dto/resend-otp.dto';
 import { AuthUser } from './token.service';
 import { AuditService } from '../common/services/audit.service';
+import argon2 from 'argon2';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class AuthService {
@@ -26,22 +27,37 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto) {
-    const existing = await this.repo.findByEmail(dto.email);
-    if (existing) {
+    try {
+      const existing = await this.repo.findByEmail(dto.email);
+      if (existing) {
+        return { message: 'If eligible, a verification code was sent' };
+      }
+
+      const hash = await argon2.hash(dto.password);
+      const user = await this.repo.createUser({
+        name: dto.name,
+        email: dto.email,
+        password: hash,
+      });
+
+      const code = await this.otp.issue(user.email);
+      await this.mailer.sendOtpEmail(user.email, code);
+      await this.audit.record({
+        action: 'user.registered',
+        targetType: 'user',
+        targetId: user.id,
+      });
+
       return { message: 'If eligible, a verification code was sent' };
+    } catch (err) {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
+        return { message: 'If eligible, a verification code was sent' };
+      }
+      throw err;
     }
-
-    const hash = await bcrypt.hash(dto.password, 10);
-    const user = await this.repo.createUser({
-      name: dto.name,
-      email: dto.email,
-      password: hash,
-    });
-
-    const code = await this.otp.issue(user.email);
-    await this.mailer.sendOtpEmail(user.email, code);
-    await this.audit.record({ action: 'user.registered', targetType: 'user', targetId: user.id });
-    return { message: 'If eligible, a verification code was sent' };
   }
 
   async verifyOtp(dto: VerifyOtpDto) {
@@ -61,20 +77,24 @@ export class AuthService {
    * Used by LocalStrategy. Verifies credentials and that the account is
    * email-verified. Wrong/missing credentials → 401; unverified account → 403.
    */
-  async validateUser(email: string, password: string): Promise<User> {
+  async validateUser(email: string, password: string): Promise<AuthUser> {
     const user = await this.repo.findByEmail(email);
     if (!user || !user.password) {
       throw new UnauthorizedException('Invalid email or password');
     }
-    const matches = await bcrypt.compare(password, user.password);
+    const matches = await argon2.verify(user.password, password);
     if (!matches) {
-      await this.audit.record({ action: 'login.failed', actorId: user.id, metadata: { reason: 'wrong_password' } });
+      await this.audit.record({
+        action: 'login.failed',
+        actorId: user.id,
+        metadata: { reason: 'wrong_password' },
+      });
       throw new UnauthorizedException('Invalid email or password');
     }
     if (!user.emailVerified) {
       throw new ForbiddenException('Email not verified');
     }
-    return user;
+    return { id: user.id, email: user.email, role: user.role, name: user.name };
   }
 
   async getAuthUser(id: number): Promise<AuthUser> {
@@ -92,9 +112,20 @@ export class AuthService {
     email: string;
     name: string;
     googleId: string;
-  }): Promise<User> {
+  }): Promise<AuthUser> {
     const byGoogle = await this.repo.findByGoogleId(p.googleId);
-    if (byGoogle) return byGoogle; // existing google user → login
+    if (byGoogle) {
+      await this.audit.record({
+        action: 'login.google.success',
+        actorId: byGoogle.id,
+      });
+      return {
+        id: byGoogle.id,
+        email: byGoogle.email,
+        role: byGoogle.role,
+        name: byGoogle.name,
+      };
+    }
 
     const byEmail = await this.repo.findByEmail(p.email);
     if (byEmail) {
@@ -103,7 +134,13 @@ export class AuthService {
         'An account with this email already exists. Log in with your password and link Google in settings.',
       );
     }
-    return this.repo.createGoogleUser(p); // brand new → create verified
+    const user = await this.repo.createGoogleUser(p); // brand new → create verified
+    await this.audit.record({
+      action: 'user.google.created',
+      targetType: 'user',
+      targetId: user.id,
+    });
+    return { id: user.id, email: user.email, role: user.role, name: user.name };
   }
 
   /**
@@ -118,7 +155,14 @@ export class AuthService {
         'This Google account is already linked to another user',
       );
     }
-    return this.repo.setGoogleId(userId, googleId);
+    const updated = await this.repo.setGoogleId(userId, googleId);
+    await this.audit.record({
+      action: 'user.google.linked',
+      actorId: userId,
+      targetType: 'user',
+      targetId: userId,
+    });
+    return updated;
   }
 
   async resendOtp(dto: ResendOtpDto) {

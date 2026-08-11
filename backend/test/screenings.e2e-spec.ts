@@ -4,7 +4,11 @@ import { PrismaClient } from '@prisma/client';
 import { createTestApp } from './support/app';
 import { resetState, closeRedis } from './support/db';
 import { createAuthedUser } from './support/auth';
-import { createHallWithSeats, createPublishedMovie, createScreening } from './support/fixtures';
+import {
+  createHallWithSeats,
+  createPublishedMovie,
+  createScreening,
+} from './support/fixtures';
 import { createTestPrismaClient } from './support/prisma';
 
 describe('Screenings (e2e)', () => {
@@ -27,7 +31,10 @@ describe('Screenings (e2e)', () => {
   });
 
   it('GET /api/v1/screenings/:id/seats returns the hall seat map', async () => {
-    const { hall, seats } = await createHallWithSeats(prisma, { rows: 1, seatsPerRow: 3 });
+    const { hall, seats } = await createHallWithSeats(prisma, {
+      rows: 1,
+      seatsPerRow: 3,
+    });
     const movie = await createPublishedMovie(prisma);
     const screening = await createScreening(prisma, {
       movieId: movie.id,

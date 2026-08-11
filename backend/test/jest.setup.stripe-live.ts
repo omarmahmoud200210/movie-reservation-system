@@ -2,7 +2,10 @@ import * as dotenv from 'dotenv';
 import * as fs from 'fs';
 import * as path from 'path';
 
-const STRIPE_LIVE_ENV_PATH = path.resolve(__dirname, '../.env.test.stripe-live');
+const STRIPE_LIVE_ENV_PATH = path.resolve(
+  __dirname,
+  '../.env.test.stripe-live',
+);
 
 if (!fs.existsSync(STRIPE_LIVE_ENV_PATH)) {
   throw new Error(

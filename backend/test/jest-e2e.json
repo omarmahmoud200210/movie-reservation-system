@@ -8,6 +8,7 @@
   "setupFiles": ["<rootDir>/test/jest.setup.ts"],
   "globalSetup": "<rootDir>/test/global-setup.ts",
   "globalTeardown": "<rootDir>/test/global-teardown.ts",
+  "modulePathIgnorePatterns": ["<rootDir>/dist/"],
   "testEnvironment": "node",
   "testTimeout": 60000
 }

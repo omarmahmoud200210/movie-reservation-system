@@ -4,6 +4,6 @@ declare const GoogleLinkStrategy_base: new (...args: [options: import("passport-
 };
 export declare class GoogleLinkStrategy extends GoogleLinkStrategy_base {
     constructor();
-    validate(_accessToken: string, _refreshToken: string, profile: Profile, done: VerifyCallback): void;
+    validate(accessToken: string, refreshToken: string, profile: Profile, done: VerifyCallback): void;
 }
 export {};

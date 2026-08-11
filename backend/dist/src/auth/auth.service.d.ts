@@ -18,22 +18,22 @@ export declare class AuthService {
     }>;
     verifyOtp(dto: VerifyOtpDto): Promise<Omit<{
         name: string;
-        createdAt: Date;
-        updatedAt: Date;
-        id: number;
         email: string;
+        role: import("@prisma/client").$Enums.UserRole;
+        id: number;
         password: string | null;
         emailVerified: boolean;
         googleId: string | null;
-        role: import("@prisma/client").$Enums.UserRole;
+        createdAt: Date;
+        updatedAt: Date;
     }, "password">>;
-    validateUser(email: string, password: string): Promise<User>;
+    validateUser(email: string, password: string): Promise<AuthUser>;
     getAuthUser(id: number): Promise<AuthUser>;
     resolveGoogleUser(p: {
         email: string;
         name: string;
         googleId: string;
-    }): Promise<User>;
+    }): Promise<AuthUser>;
     linkGoogle(userId: number, googleId: string): Promise<User>;
     resendOtp(dto: ResendOtpDto): Promise<{
         message: string;

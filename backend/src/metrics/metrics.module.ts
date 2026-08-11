@@ -87,7 +87,6 @@ const responseSizeHistograms = [
   }),
 ];
 
-
 @Global()
 @Module({
   imports: [

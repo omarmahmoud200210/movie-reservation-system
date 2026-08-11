@@ -19,30 +19,30 @@ let MoviesRepository = class MoviesRepository {
         this.prisma = prisma;
     }
     create(data) {
-        return this.prisma.write.movie.create({ data });
+        return this.prisma.movie.create({ data });
     }
     update(id, data) {
-        return this.prisma.write.movie.update({ where: { id }, data });
+        return this.prisma.movie.update({ where: { id }, data });
     }
     findById(id) {
-        return this.prisma.read.movie.findUnique({ where: { id } });
+        return this.prisma.movie.findUnique({ where: { id } });
     }
     setStatus(id, status) {
-        return this.prisma.write.movie.update({ where: { id }, data: { status } });
+        return this.prisma.movie.update({ where: { id }, data: { status } });
     }
     delete(id) {
-        return this.prisma.write.movie.delete({ where: { id } });
+        return this.prisma.movie.delete({ where: { id } });
     }
     listAll() {
-        return this.prisma.read.movie.findMany({ orderBy: { createdAt: 'desc' } });
+        return this.prisma.movie.findMany({ orderBy: { createdAt: 'desc' } });
     }
     findPublishedById(id) {
-        return this.prisma.read.movie.findFirst({
+        return this.prisma.movie.findFirst({
             where: { id, status: client_1.MovieStatus.PUBLISHED },
         });
     }
     findPublishedForBrowse(now) {
-        return this.prisma.read.movie.findMany({
+        return this.prisma.movie.findMany({
             where: { status: client_1.MovieStatus.PUBLISHED },
             include: {
                 screens: {
@@ -55,7 +55,7 @@ let MoviesRepository = class MoviesRepository {
         });
     }
     async hasReservations(movieId) {
-        const reservations = await this.prisma.read.reservation.findFirst({
+        const reservations = await this.prisma.reservation.findFirst({
             where: { screen: { movieId } },
             select: { id: true },
         });

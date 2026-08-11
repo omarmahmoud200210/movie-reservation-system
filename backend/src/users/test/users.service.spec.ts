@@ -62,7 +62,12 @@ describe('UsersService', () => {
     service = module.get<UsersService>(UsersService);
   });
 
-  const authUser = { id: 1, name: 'Jane', email: 'jane@example.com', role: 'USER' };
+  const authUser = {
+    id: 1,
+    name: 'Jane',
+    email: 'jane@example.com',
+    role: 'USER',
+  };
 
   describe('updateName', () => {
     it('updates via the repo, then returns the fresh AuthUser', async () => {
@@ -115,7 +120,11 @@ describe('UsersService', () => {
       mockRepo.findByEmail.mockResolvedValue(null);
       mockOtp.issue.mockResolvedValue('123456');
 
-      const result = await service.requestEmailChange(1, 'new@example.com', 'current');
+      const result = await service.requestEmailChange(
+        1,
+        'new@example.com',
+        'current',
+      );
 
       expect(mockRedis.set).toHaveBeenCalledWith(
         'pending_email:1',
@@ -124,8 +133,13 @@ describe('UsersService', () => {
         300,
       );
       expect(mockOtp.issue).toHaveBeenCalledWith('new@example.com');
-      expect(mockMailer.sendOtpEmail).toHaveBeenCalledWith('new@example.com', '123456');
-      expect(result).toEqual({ message: 'Verification code sent to new email' });
+      expect(mockMailer.sendOtpEmail).toHaveBeenCalledWith(
+        'new@example.com',
+        '123456',
+      );
+      expect(result).toEqual({
+        message: 'Verification code sent to new email',
+      });
     });
   });
 
@@ -133,9 +147,9 @@ describe('UsersService', () => {
     it('throws 400 when there is no pending email change', async () => {
       mockRedis.get.mockResolvedValue(null);
 
-      await expect(service.confirmEmailChange(1, '123456')).rejects.toBeInstanceOf(
-        BadRequestException,
-      );
+      await expect(
+        service.confirmEmailChange(1, '123456'),
+      ).rejects.toBeInstanceOf(BadRequestException);
       expect(mockOtp.verify).not.toHaveBeenCalled();
     });
 
@@ -143,9 +157,9 @@ describe('UsersService', () => {
       mockRedis.get.mockResolvedValue('new@example.com');
       mockOtp.verify.mockResolvedValue(false);
 
-      await expect(service.confirmEmailChange(1, 'wrong')).rejects.toBeInstanceOf(
-        BadRequestException,
-      );
+      await expect(
+        service.confirmEmailChange(1, 'wrong'),
+      ).rejects.toBeInstanceOf(BadRequestException);
       expect(mockRepo.updateEmail).not.toHaveBeenCalled();
     });
 
@@ -215,7 +229,10 @@ describe('UsersService', () => {
       expect(mockBcrypt.hash).toHaveBeenCalledWith('newpassword', 10);
       expect(mockRepo.updatePassword).toHaveBeenCalledWith(1, 'new-hash');
       expect(mockTokenService.revokeAllSessions).toHaveBeenCalledWith(1);
-      expect(mockTokenService.issueAuthCookies).toHaveBeenCalledWith(res, authUser);
+      expect(mockTokenService.issueAuthCookies).toHaveBeenCalledWith(
+        res,
+        authUser,
+      );
     });
   });
 });

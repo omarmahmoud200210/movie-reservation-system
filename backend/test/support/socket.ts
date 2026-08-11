@@ -15,16 +15,35 @@ export function joinScreening(
   socket: Socket,
   screeningId: number,
   timeoutMs = 5000,
-): Promise<{ ok: boolean; seats?: unknown[]; summary?: unknown; error?: string }> {
+): Promise<{
+  ok: boolean;
+  seats?: unknown[];
+  summary?: unknown;
+  error?: string;
+}> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(
-      () => reject(new Error(`Timed out waiting for join:screening ack (screeningId=${screeningId})`)),
+      () =>
+        reject(
+          new Error(
+            `Timed out waiting for join:screening ack (screeningId=${screeningId})`,
+          ),
+        ),
       timeoutMs,
     );
-    socket.emit('join:screening', { screeningId }, (ack: { ok: boolean; seats?: unknown[]; summary?: unknown; error?: string }) => {
-      clearTimeout(timer);
-      resolve(ack);
-    });
+    socket.emit(
+      'join:screening',
+      { screeningId },
+      (ack: {
+        ok: boolean;
+        seats?: unknown[];
+        summary?: unknown;
+        error?: string;
+      }) => {
+        clearTimeout(timer);
+        resolve(ack);
+      },
+    );
   });
 }
 

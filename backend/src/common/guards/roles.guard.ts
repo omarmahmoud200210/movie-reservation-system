@@ -7,6 +7,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
 import type { UserRole } from '@prisma/client';
+import type { AuthUser } from '../../auth/token.service';
 import { ROLES_KEY } from '../decorators/roles.decorator';
 
 /**
@@ -31,7 +32,7 @@ export class RolesGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest<Request>();
-    const user = request.user as { role?: UserRole } | undefined;
+    const user = request.user as AuthUser | undefined;
 
     if (!user || !user.role || !requiredRoles.includes(user.role)) {
       throw new ForbiddenException('Insufficient role');

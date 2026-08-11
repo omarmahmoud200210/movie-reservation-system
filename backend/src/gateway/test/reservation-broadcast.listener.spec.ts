@@ -49,11 +49,11 @@ describe('ReservationBroadcastListener', () => {
       expect(mockBroadcastsCounter.inc).toHaveBeenCalledWith({
         event: 'seat:reserved',
       });
-      expect(mockGateway.emitToRoom).toHaveBeenCalledWith(
-        10,
-        'seat:reserved',
-        { screeningId: 10, seatIds: [1, 2], status: SeatStatus.HELD },
-      );
+      expect(mockGateway.emitToRoom).toHaveBeenCalledWith(10, 'seat:reserved', {
+        screeningId: 10,
+        seatIds: [1, 2],
+        status: SeatStatus.HELD,
+      });
       expect(mockGateway.emitToRoom).toHaveBeenCalledWith(
         10,
         'screening:summary',
@@ -70,11 +70,11 @@ describe('ReservationBroadcastListener', () => {
         listener.handleCreated({ screeningId: 10, seatIds: [1] }),
       ).resolves.toBeUndefined();
 
-      expect(mockGateway.emitToRoom).toHaveBeenCalledWith(
-        10,
-        'seat:reserved',
-        { screeningId: 10, seatIds: [1], status: SeatStatus.HELD },
-      );
+      expect(mockGateway.emitToRoom).toHaveBeenCalledWith(10, 'seat:reserved', {
+        screeningId: 10,
+        seatIds: [1],
+        status: SeatStatus.HELD,
+      });
       expect(mockGateway.emitToRoom).not.toHaveBeenCalledWith(
         10,
         'screening:summary',
@@ -139,11 +139,11 @@ describe('ReservationBroadcastListener', () => {
       expect(mockBroadcastsCounter.inc).toHaveBeenCalledWith({
         event: 'seat:booked',
       });
-      expect(mockGateway.emitToRoom).toHaveBeenCalledWith(
-        10,
-        'seat:booked',
-        { screeningId: 10, seatIds: [11], status: SeatStatus.BOOKED },
-      );
+      expect(mockGateway.emitToRoom).toHaveBeenCalledWith(10, 'seat:booked', {
+        screeningId: 10,
+        seatIds: [11],
+        status: SeatStatus.BOOKED,
+      });
       expect(mockGateway.emitToRoom).toHaveBeenCalledWith(
         10,
         'screening:summary',
@@ -160,11 +160,11 @@ describe('ReservationBroadcastListener', () => {
         listener.handleConfirmed({ screeningId: 10, seatIds: [11] }),
       ).resolves.toBeUndefined();
 
-      expect(mockGateway.emitToRoom).toHaveBeenCalledWith(
-        10,
-        'seat:booked',
-        { screeningId: 10, seatIds: [11], status: SeatStatus.BOOKED },
-      );
+      expect(mockGateway.emitToRoom).toHaveBeenCalledWith(10, 'seat:booked', {
+        screeningId: 10,
+        seatIds: [11],
+        status: SeatStatus.BOOKED,
+      });
       expect(mockGateway.emitToRoom).not.toHaveBeenCalledWith(
         10,
         'screening:summary',

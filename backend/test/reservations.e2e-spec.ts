@@ -4,7 +4,11 @@ import { PrismaClient, ReservationStatus } from '@prisma/client';
 import { createTestApp, baseUrl } from './support/app';
 import { resetState, closeRedis } from './support/db';
 import { createAuthedUser } from './support/auth';
-import { createHallWithSeats, createPublishedMovie, createScreening } from './support/fixtures';
+import {
+  createHallWithSeats,
+  createPublishedMovie,
+  createScreening,
+} from './support/fixtures';
 import { connectSocket, joinScreening, waitForEvent } from './support/socket';
 import { createTestPrismaClient } from './support/prisma';
 import { HoldExpiryCron } from '../src/cron/hold-expiry.cron';
@@ -29,7 +33,10 @@ describe('Reservations (e2e)', () => {
   });
 
   async function seedScreening() {
-    const { hall, seats } = await createHallWithSeats(prisma, { rows: 1, seatsPerRow: 2 });
+    const { hall, seats } = await createHallWithSeats(prisma, {
+      rows: 1,
+      seatsPerRow: 2,
+    });
     const movie = await createPublishedMovie(prisma);
     const screening = await createScreening(prisma, {
       movieId: movie.id,
@@ -81,7 +88,10 @@ describe('Reservations (e2e)', () => {
     const socket = await connectSocket(baseUrl(app));
     try {
       await joinScreening(socket, screening.id);
-      const broadcast = waitForEvent<{ seatIds: number[]; status: string }>(socket, 'seat:reserved');
+      const broadcast = waitForEvent<{ seatIds: number[]; status: string }>(
+        socket,
+        'seat:reserved',
+      );
 
       await request(app.getHttpServer())
         .post('/api/v1/reservations')
@@ -113,7 +123,10 @@ describe('Reservations (e2e)', () => {
     const socket = await connectSocket(baseUrl(app));
     try {
       await joinScreening(socket, screening.id);
-      const broadcast = waitForEvent<{ seatIds: number[] }>(socket, 'seat:cancelled');
+      const broadcast = waitForEvent<{ seatIds: number[] }>(
+        socket,
+        'seat:cancelled',
+      );
 
       const cron = app.get(HoldExpiryCron);
       await cron.handleExpireHolds();

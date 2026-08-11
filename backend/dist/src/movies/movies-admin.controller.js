@@ -31,27 +31,52 @@ let MoviesAdminController = class MoviesAdminController {
     }
     async create(dto, user) {
         const movie = await this.moviesService.createMovie(dto);
-        await this.audit.record({ action: 'movie.created', actorId: user.id, targetType: 'movie', targetId: movie.id });
+        await this.audit.record({
+            action: 'movie.created',
+            actorId: user.id,
+            targetType: 'movie',
+            targetId: movie.id,
+        });
         return movie;
     }
     async update(id, dto, user) {
         const movie = await this.moviesService.updateMovie(id, dto);
-        await this.audit.record({ action: 'movie.updated', actorId: user.id, targetType: 'movie', targetId: id });
+        await this.audit.record({
+            action: 'movie.updated',
+            actorId: user.id,
+            targetType: 'movie',
+            targetId: id,
+        });
         return movie;
     }
     async publish(id, user) {
         const movie = await this.moviesService.publish(id);
-        await this.audit.record({ action: 'movie.published', actorId: user.id, targetType: 'movie', targetId: id });
+        await this.audit.record({
+            action: 'movie.published',
+            actorId: user.id,
+            targetType: 'movie',
+            targetId: id,
+        });
         return movie;
     }
     async unpublish(id, user) {
         const movie = await this.moviesService.unpublish(id);
-        await this.audit.record({ action: 'movie.unpublished', actorId: user.id, targetType: 'movie', targetId: id });
+        await this.audit.record({
+            action: 'movie.unpublished',
+            actorId: user.id,
+            targetType: 'movie',
+            targetId: id,
+        });
         return movie;
     }
     async remove(id, user) {
         const result = await this.moviesService.deleteMovie(id);
-        await this.audit.record({ action: 'movie.deleted', actorId: user.id, targetType: 'movie', targetId: id });
+        await this.audit.record({
+            action: 'movie.deleted',
+            actorId: user.id,
+            targetType: 'movie',
+            targetId: id,
+        });
         return result;
     }
     listAll() {

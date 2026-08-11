@@ -59,8 +59,8 @@ describe('ReservationsService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    mockReservationBreaker.holdSeat.mockImplementation(
-      (params) => mockReservationsRepo.holdSeat(params),
+    mockReservationBreaker.holdSeat.mockImplementation((params) =>
+      mockReservationsRepo.holdSeat(params),
     );
     jest.useFakeTimers().setSystemTime(NOW);
 

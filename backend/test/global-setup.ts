@@ -10,7 +10,6 @@ import { RedisContainer, StartedRedisContainer } from '@testcontainers/redis';
 const RUNTIME_ENV_PATH = path.resolve(__dirname, '.env.test.runtime');
 
 declare global {
-  // eslint-disable-next-line no-var
   var __TESTCONTAINERS__:
     | { postgres: StartedPostgreSqlContainer; redis: StartedRedisContainer }
     | undefined;
@@ -32,7 +31,11 @@ export default async function globalSetup(): Promise<void> {
 
   execSync('npx prisma migrate deploy', {
     cwd: path.resolve(__dirname, '..'),
-    env: { ...process.env, DATABASE_URL: databaseUrl },
+    env: {
+      ...process.env,
+      DATABASE_URL: databaseUrl,
+      DIRECT_URL: databaseUrl,
+    },
     stdio: 'inherit',
   });
 

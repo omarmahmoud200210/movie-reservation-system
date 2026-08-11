@@ -13,6 +13,7 @@ exports.JwtRefreshStrategy = void 0;
 const common_1 = require("@nestjs/common");
 const passport_1 = require("@nestjs/passport");
 const passport_jwt_1 = require("passport-jwt");
+const auth_env_config_1 = require("../auth-env.config");
 let JwtRefreshStrategy = class JwtRefreshStrategy extends (0, passport_1.PassportStrategy)(passport_jwt_1.Strategy, 'jwt-refresh') {
     constructor() {
         super({
@@ -21,7 +22,7 @@ let JwtRefreshStrategy = class JwtRefreshStrategy extends (0, passport_1.Passpor
                     null,
             ]),
             ignoreExpiration: false,
-            secretOrKey: process.env.JWT_REFRESH_SECRET,
+            secretOrKey: auth_env_config_1.authEnv.jwtRefreshSecret,
         });
     }
     validate(payload) {

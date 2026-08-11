@@ -35,9 +35,7 @@ describe('HoldExpiryCron', () => {
   });
 
   it('swallows a failure instead of throwing', async () => {
-    mockReservationsService.expireHolds.mockRejectedValue(
-      new Error('DB down'),
-    );
+    mockReservationsService.expireHolds.mockRejectedValue(new Error('DB down'));
 
     await expect(cron.handleExpireHolds()).resolves.toBeUndefined();
   });
@@ -47,7 +45,9 @@ describe('HoldExpiryCron', () => {
 
     await cron.handleReconcilePayments();
 
-    expect(mockPaymentsService.reconcileTimedOutPayments).toHaveBeenCalledTimes(1);
+    expect(mockPaymentsService.reconcileTimedOutPayments).toHaveBeenCalledTimes(
+      1,
+    );
   });
 
   it('swallows a reconciliation failure instead of throwing', async () => {

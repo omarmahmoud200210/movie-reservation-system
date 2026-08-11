@@ -8,4 +8,5 @@ export interface RateLimitConfig {
   key: string;
 }
 
-export const RateLimit = (config: RateLimitConfig) => SetMetadata(RATE_LIMIT_KEY, config);
+export const RateLimit = (config: RateLimitConfig) =>
+  SetMetadata(RATE_LIMIT_KEY, config);

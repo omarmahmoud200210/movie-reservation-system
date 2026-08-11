@@ -15,13 +15,15 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.OtpService = void 0;
 const common_1 = require("@nestjs/common");
 const redis_cache_1 = __importDefault(require("../redis/redis.cache"));
+const crypto_1 = require("crypto");
+const auth_env_config_1 = require("./auth-env.config");
 let OtpService = class OtpService {
     redis;
     constructor(redis) {
         this.redis = redis;
     }
     gen() {
-        return Math.floor(100000 + Math.random() * 900000).toString();
+        return (0, crypto_1.randomInt)(100000, 999999).toString();
     }
     async issue(email) {
         const cooldownKey = `otp_cooldown:${email}`;
@@ -29,12 +31,12 @@ let OtpService = class OtpService {
             throw new common_1.BadRequestException('Please wait before requesting another code');
         }
         const code = this.gen();
-        const ttl = Number(process.env.OTP_TTL_SECONDS);
+        const ttl = auth_env_config_1.authEnv.otpTtlSeconds;
         await this.redis
             .pipeline()
             .set(`otp:${email}`, code, 'EX', ttl)
             .del(`otp_attempts:${email}`)
-            .set(cooldownKey, '1', 'EX', Number(process.env.OTP_RESEND_COOLDOWN_SECONDS))
+            .set(cooldownKey, '1', 'EX', auth_env_config_1.authEnv.otpResendCooldownSeconds)
             .exec();
         return code;
     }
@@ -43,8 +45,12 @@ let OtpService = class OtpService {
         const stored = await this.redis.get(key);
         if (!stored)
             throw new common_1.BadRequestException('Code expired or not found');
-        const attempts = await this.redis.incr(`otp_attempts:${email}`);
-        if (attempts > Number(process.env.OTP_MAX_ATTEMPTS)) {
+        const pipeline = this.redis.pipeline();
+        pipeline.incr(`otp_attempts:${email}`);
+        pipeline.expire(`otp_attempts:${email}`, auth_env_config_1.authEnv.otpTtlSeconds);
+        const result = (await pipeline.exec());
+        const attempts = result[0][1];
+        if (attempts > auth_env_config_1.authEnv.otpMaxAttempts) {
             await this.redis.del(key);
             throw new common_1.BadRequestException('Too many attempts, request a new code');
         }

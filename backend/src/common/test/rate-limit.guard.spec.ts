@@ -4,7 +4,10 @@ import { HttpException, HttpStatus } from '@nestjs/common';
 import type { ExecutionContext } from '@nestjs/common';
 
 import { RateLimitGuard } from '../guards/rate-limit.guard';
-import { RATE_LIMIT_KEY, RateLimitConfig } from '../decorators/rate-limit.decorator';
+import {
+  RATE_LIMIT_KEY,
+  RateLimitConfig,
+} from '../decorators/rate-limit.decorator';
 import RateLimiterService from '../../redis/rate-limiter.service';
 
 describe('RateLimitGuard', () => {
@@ -42,8 +45,8 @@ describe('RateLimitGuard', () => {
     }).compile();
 
     guard = module.get<RateLimitGuard>(RateLimitGuard);
-    mockReflector = module.get(Reflector) as jest.Mocked<Reflector>;
-    mockRateLimiterService = module.get(RateLimiterService) as jest.Mocked<RateLimiterService>;
+    mockReflector = module.get(Reflector);
+    mockRateLimiterService = module.get(RateLimiterService);
   });
 
   afterEach(() => {
@@ -60,7 +63,11 @@ describe('RateLimitGuard', () => {
   });
 
   it('calls rateLimiter with the correct key and config when allowed', async () => {
-    const config: RateLimitConfig = { points: 5, duration: 60000, key: 'test-endpoint' };
+    const config: RateLimitConfig = {
+      points: 5,
+      duration: 60000,
+      key: 'test-endpoint',
+    };
     mockReflector.getAllAndOverride.mockReturnValue(config);
     mockRequest.user = { id: 42 };
     mockRateLimiterService.rateLimiter.mockResolvedValue({
@@ -80,7 +87,11 @@ describe('RateLimitGuard', () => {
   });
 
   it('throws HttpException(429) and sets Retry-After header when rate limited', async () => {
-    const config: RateLimitConfig = { points: 3, duration: 30000, key: 'login' };
+    const config: RateLimitConfig = {
+      points: 3,
+      duration: 30000,
+      key: 'login',
+    };
     mockReflector.getAllAndOverride.mockReturnValue(config);
     mockRequest.user = { id: 99 };
     mockRateLimiterService.rateLimiter.mockResolvedValue({

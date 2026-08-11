@@ -3,6 +3,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import type { Request } from 'express';
 import type { RefreshPayload } from '../token.service';
+import { authEnv } from '../auth-env.config';
 
 export interface RefreshUser {
   id: number;
@@ -22,7 +23,7 @@ export class JwtRefreshStrategy extends PassportStrategy(
           null,
       ]),
       ignoreExpiration: false,
-      secretOrKey: process.env.JWT_REFRESH_SECRET as string,
+      secretOrKey: authEnv.jwtRefreshSecret,
     });
   }
 

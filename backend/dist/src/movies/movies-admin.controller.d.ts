@@ -9,9 +9,9 @@ export declare class MoviesAdminController {
     constructor(moviesService: MoviesService, audit: AuditService);
     create(dto: CreateMovieDto, user: AuthUser): Promise<{
         name: string;
+        id: number;
         createdAt: Date;
         updatedAt: Date;
-        id: number;
         description: string;
         duration: number;
         posterImgUrl: string;
@@ -23,9 +23,9 @@ export declare class MoviesAdminController {
     }>;
     update(id: number, dto: UpdateMovieDto, user: AuthUser): Promise<{
         name: string;
+        id: number;
         createdAt: Date;
         updatedAt: Date;
-        id: number;
         description: string;
         duration: number;
         posterImgUrl: string;
@@ -37,9 +37,9 @@ export declare class MoviesAdminController {
     }>;
     publish(id: number, user: AuthUser): Promise<{
         name: string;
+        id: number;
         createdAt: Date;
         updatedAt: Date;
-        id: number;
         description: string;
         duration: number;
         posterImgUrl: string;
@@ -51,9 +51,9 @@ export declare class MoviesAdminController {
     }>;
     unpublish(id: number, user: AuthUser): Promise<{
         name: string;
+        id: number;
         createdAt: Date;
         updatedAt: Date;
-        id: number;
         description: string;
         duration: number;
         posterImgUrl: string;
@@ -65,9 +65,9 @@ export declare class MoviesAdminController {
     }>;
     remove(id: number, user: AuthUser): Promise<{
         name: string;
+        id: number;
         createdAt: Date;
         updatedAt: Date;
-        id: number;
         description: string;
         duration: number;
         posterImgUrl: string;
@@ -79,9 +79,9 @@ export declare class MoviesAdminController {
     }>;
     listAll(): Promise<{
         name: string;
+        id: number;
         createdAt: Date;
         updatedAt: Date;
-        id: number;
         description: string;
         duration: number;
         posterImgUrl: string;

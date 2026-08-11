@@ -1,7 +1,8 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { Profile, Strategy, VerifyCallback } from 'passport-google-oauth20';
-import type { GoogleProfile } from './google.strategy';
+import { authEnv } from '../auth-env.config';
+import validate, { GoogleProfile } from '../util/google.profile.util';
 
 /**
  * Separate Google strategy used only for the "link from settings" flow. It has
@@ -15,29 +16,19 @@ export class GoogleLinkStrategy extends PassportStrategy(
 ) {
   constructor() {
     super({
-      clientID: process.env.GOOGLE_CLIENT_ID as string,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
-      callbackURL: process.env.GOOGLE_LINK_CALLBACK_URL as string,
+      clientID: authEnv.googleClientId,
+      clientSecret: authEnv.googleClientSecret,
+      callbackURL: authEnv.googleLinkCallbackUrl,
       scope: ['email', 'profile'],
     });
   }
 
   validate(
-    _accessToken: string,
-    _refreshToken: string,
+    accessToken: string,
+    refreshToken: string,
     profile: Profile,
     done: VerifyCallback,
-  ): void {
-    const email = profile.emails?.[0]?.value;
-    if (!email) {
-      done(new UnauthorizedException('Google account has no email'), false);
-      return;
-    }
-    const user: GoogleProfile = {
-      email,
-      name: profile.displayName,
-      googleId: profile.id,
-    };
-    done(null, user);
+  ) {
+    return validate(accessToken, refreshToken, profile, done);
   }
 }

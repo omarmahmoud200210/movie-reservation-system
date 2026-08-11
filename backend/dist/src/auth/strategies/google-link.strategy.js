@@ -8,32 +8,27 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.GoogleLinkStrategy = void 0;
 const common_1 = require("@nestjs/common");
 const passport_1 = require("@nestjs/passport");
 const passport_google_oauth20_1 = require("passport-google-oauth20");
+const auth_env_config_1 = require("../auth-env.config");
+const google_profile_util_1 = __importDefault(require("../util/google.profile.util"));
 let GoogleLinkStrategy = class GoogleLinkStrategy extends (0, passport_1.PassportStrategy)(passport_google_oauth20_1.Strategy, 'google-link') {
     constructor() {
         super({
-            clientID: process.env.GOOGLE_CLIENT_ID,
-            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-            callbackURL: process.env.GOOGLE_LINK_CALLBACK_URL,
+            clientID: auth_env_config_1.authEnv.googleClientId,
+            clientSecret: auth_env_config_1.authEnv.googleClientSecret,
+            callbackURL: auth_env_config_1.authEnv.googleLinkCallbackUrl,
             scope: ['email', 'profile'],
         });
     }
-    validate(_accessToken, _refreshToken, profile, done) {
-        const email = profile.emails?.[0]?.value;
-        if (!email) {
-            done(new common_1.UnauthorizedException('Google account has no email'), false);
-            return;
-        }
-        const user = {
-            email,
-            name: profile.displayName,
-            googleId: profile.id,
-        };
-        done(null, user);
+    validate(accessToken, refreshToken, profile, done) {
+        return (0, google_profile_util_1.default)(accessToken, refreshToken, profile, done);
     }
 };
 exports.GoogleLinkStrategy = GoogleLinkStrategy;

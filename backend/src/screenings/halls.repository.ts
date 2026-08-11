@@ -36,7 +36,7 @@ export class HallsRepository {
     const { name, rows, seatsPerRow } = input;
     const capacity = rows * seatsPerRow;
 
-    return this.prisma.write.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx) => {
       const hall = await tx.hall.create({ data: { name, capacity } });
 
       const seats: Prisma.SeatCreateManyInput[] = [];
@@ -56,28 +56,28 @@ export class HallsRepository {
   }
 
   findHallWithSeats(id: number): Promise<HallWithSeats | null> {
-    return this.prisma.read.hall.findUnique({
+    return this.prisma.hall.findUnique({
       where: { id },
       include: { seats: { orderBy: [{ row: 'asc' }, { id: 'asc' }] } },
     });
   }
 
   listHalls(): Promise<Hall[]> {
-    return this.prisma.read.hall.findMany({ orderBy: { id: 'asc' } });
+    return this.prisma.hall.findMany({ orderBy: { id: 'asc' } });
   }
 
   /** Lightweight existence/lookup without the seat grid. */
   findById(id: number): Promise<Hall | null> {
-    return this.prisma.read.hall.findUnique({ where: { id } });
+    return this.prisma.hall.findUnique({ where: { id } });
   }
 
   deleteHall(id: number): Promise<Hall> {
-    return this.prisma.write.hall.delete({ where: { id } });
+    return this.prisma.hall.delete({ where: { id } });
   }
 
   /** True if any reservation exists on any screening of this hall. */
   async hasReservations(hallId: number): Promise<boolean> {
-    const reservation = await this.prisma.read.reservation.findFirst({
+    const reservation = await this.prisma.reservation.findFirst({
       where: { screen: { hallId } },
       select: { id: true },
     });

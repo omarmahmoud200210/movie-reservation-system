@@ -1,6 +1,14 @@
-import { HttpException, Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
+import {
+  HttpException,
+  Inject,
+  Injectable,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import CircuitBreaker from 'opossum';
-import { ReservationsRepository, type HoldSeatParams } from './reservations.repository';
+import {
+  ReservationsRepository,
+  type HoldSeatParams,
+} from './reservations.repository';
 import type { Reservation } from '@prisma/client';
 
 export const RESERVATION_BREAKER_OPTIONS = 'RESERVATION_BREAKER_OPTIONS';

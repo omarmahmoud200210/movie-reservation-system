@@ -12,7 +12,7 @@ import { AuthRepository } from '../auth.repository';
 import { OtpService } from '../otp.service';
 import { MailerService } from '../../mailer/mailer.service';
 import { AuditService } from '../../common/services/audit.service';
-import * as bcrypt from 'bcrypt';
+import argon2 from 'argon2';
 
 const mockRepo = {
   findByEmail: jest.fn(),
@@ -24,17 +24,16 @@ const mockRepo = {
   markEmailVerified: jest.fn(),
 };
 
-// Mock bcrypt
-jest.mock('bcrypt', () => ({
+// Mock argon2
+jest.mock('argon2', () => ({
   hash: jest.fn(),
-  compare: jest.fn(),
-  compareSync: jest.fn(),
+  verify: jest.fn(),
 }));
 
 const mockOtp = { issue: jest.fn(), verify: jest.fn() };
 const mockMailer = { sendOtpEmail: jest.fn() };
 const mockAudit = { record: jest.fn() };
-const mockBcrypt = bcrypt as jest.Mocked<typeof bcrypt>;
+const mockArgon2 = argon2 as jest.Mocked<typeof argon2>;
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -80,7 +79,9 @@ describe('AuthService', () => {
 
       const result = await service.register(registerDto);
 
-      expect(result).toEqual({ message: 'If eligible, a verification code was sent' });
+      expect(result).toEqual({
+        message: 'If eligible, a verification code was sent',
+      });
       expect(mockOtp.issue).toHaveBeenCalledWith(user.email);
       expect(mockMailer.sendOtpEmail).toHaveBeenCalledWith(
         user.email,
@@ -93,7 +94,9 @@ describe('AuthService', () => {
 
       const result = await service.register(registerDto);
 
-      expect(result).toEqual({ message: 'If eligible, a verification code was sent' });
+      expect(result).toEqual({
+        message: 'If eligible, a verification code was sent',
+      });
       expect(mockRepo.createUser).not.toHaveBeenCalled();
       expect(mockOtp.issue).not.toHaveBeenCalled();
       expect(mockMailer.sendOtpEmail).not.toHaveBeenCalled();
@@ -186,15 +189,21 @@ describe('AuthService', () => {
 
   describe('Validate User', () => {
     const verifiedUser = { ...user, emailVerified: true };
+    const expectedAuthUser = {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      name: user.name,
+    };
 
     it('Should validate user successfully', async () => {
       mockRepo.findByEmail.mockResolvedValue(verifiedUser);
-      mockBcrypt.compare.mockResolvedValue(true as never);
+      mockArgon2.verify.mockResolvedValue(true);
 
       const result = await service.validateUser(user.email, 'correct');
 
-      expect(result).toEqual(verifiedUser);
-      expect(mockBcrypt.compare).toHaveBeenCalledWith('correct', user.password);
+      expect(result).toEqual(expectedAuthUser);
+      expect(mockArgon2.verify).toHaveBeenCalledWith(user.password, 'correct');
     });
 
     it('Should throw error if user not found', async () => {
@@ -202,34 +211,41 @@ describe('AuthService', () => {
       await expect(
         service.validateUser(user.email, user.password),
       ).rejects.toThrow(UnauthorizedException);
-      expect(mockBcrypt.compare).not.toHaveBeenCalled();
+      expect(mockArgon2.verify).not.toHaveBeenCalled();
     });
 
     it('Should throw error if the password is wrong', async () => {
       mockRepo.findByEmail.mockResolvedValue(verifiedUser);
-      mockBcrypt.compare.mockResolvedValue(false as never);
+      mockArgon2.verify.mockResolvedValue(false);
 
       await expect(service.validateUser(user.email, 'wrong')).rejects.toThrow(
         UnauthorizedException,
       );
-      expect(mockBcrypt.compare).toHaveBeenCalledWith('wrong', user.password);
+      expect(mockArgon2.verify).toHaveBeenCalledWith(user.password, 'wrong');
     });
 
     it('Should throw an error if the user unverified', async () => {
       mockRepo.findByEmail.mockResolvedValue(user); // emailVerified: false
-      mockBcrypt.compare.mockResolvedValue(true as never);
+      mockArgon2.verify.mockResolvedValue(true);
 
-      await expect(
-        service.validateUser(user.email, 'correct'),
-      ).rejects.toThrow(ForbiddenException);
+      await expect(service.validateUser(user.email, 'correct')).rejects.toThrow(
+        ForbiddenException,
+      );
     });
   });
 
   describe('Resolve Google User', () => {
     const googleProfile = {
-      email: '[EMAIL_ADDRESS]',
+      email: user.email,
       name: 'John Doe',
       googleId: 'google-123',
+    };
+
+    const expectedAuthUser = {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      name: user.name,
     };
 
     it('Should return the existing google user when googleId is known', async () => {
@@ -238,7 +254,7 @@ describe('AuthService', () => {
 
       const result = await service.resolveGoogleUser(googleProfile);
 
-      expect(result).toEqual(googleUser);
+      expect(result).toEqual(expectedAuthUser);
       expect(mockRepo.findByEmail).not.toHaveBeenCalled();
       expect(mockRepo.createGoogleUser).not.toHaveBeenCalled();
     });
@@ -256,7 +272,7 @@ describe('AuthService', () => {
 
       const result = await service.resolveGoogleUser(googleProfile);
 
-      expect(result).toEqual(createdUser);
+      expect(result).toEqual(expectedAuthUser);
       expect(mockRepo.createGoogleUser).toHaveBeenCalledWith(googleProfile);
     });
 

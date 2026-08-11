@@ -25,13 +25,16 @@ import { GoogleAuthGuard } from './guards/google-auth.guard';
 import { GoogleLinkAuthGuard } from './guards/google-link-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
 import type { RefreshUser } from './strategies/jwt-refresh.strategy';
-import type { GoogleProfile } from './strategies/google.strategy';
+import type { GoogleProfile } from './util/google.profile.util';
+import { authEnv } from './auth-env.config';
+import { AuditService } from '../common/services/audit.service';
 
 @Controller('auth')
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly tokenService: TokenService,
+    private readonly audit: AuditService,
   ) {}
 
   @Post('register')
@@ -44,7 +47,7 @@ export class AuthController {
   async verifyOtp(
     @Body() dto: VerifyOtpDto,
     @Res({ passthrough: true }) res: Response,
-  ) {
+  ): Promise<AuthUser> {
     const user = await this.authService.verifyOtp(dto);
     // Auto-login: issue cookies immediately after verification.
     await this.tokenService.issueAuthCookies(res, {
@@ -53,7 +56,8 @@ export class AuthController {
       role: user.role,
       name: user.name,
     });
-    return user;
+
+    return { id: user.id, email: user.email, role: user.role, name: user.name };
   }
 
   @Post('resend-otp')
@@ -71,6 +75,10 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     await this.tokenService.issueAuthCookies(res, user);
+    await this.audit.record({
+      action: 'login.success',
+      actorId: user.id,
+    });
     return user;
   }
 
@@ -87,6 +95,10 @@ export class AuthController {
       { id: user.id, jti: user.jti },
       fresh,
     );
+    await this.audit.record({
+      action: 'token.refreshed',
+      actorId: user.id,
+    });
     return { message: 'Token refreshed' };
   }
 
@@ -99,6 +111,10 @@ export class AuthController {
   ) {
     await this.tokenService.revokeAllSessions(user.id);
     this.tokenService.clearAuthCookies(res);
+    await this.audit.record({
+      action: 'user.logout',
+      actorId: user.id,
+    });
     return { message: 'Logged out' };
   }
 
@@ -137,11 +153,11 @@ export class AuthController {
         role: user.role,
         name: user.name,
       });
-      return res.redirect(`${process.env.FRONTEND_URL}/auth/google/callback`);
+      return res.redirect(`${authEnv.frontendUrl}/auth/google/callback`);
     } catch (err) {
       if (err instanceof ConflictException) {
         return res.redirect(
-          `${process.env.FRONTEND_URL}/login?error=account_exists`,
+          `${authEnv.frontendUrl}/login?error=account_exists`,
         );
       }
       throw err;
@@ -177,11 +193,11 @@ export class AuthController {
     const { id } = this.tokenService.verifyLinkState(query.state);
     try {
       await this.authService.linkGoogle(id, profile.googleId);
-      return res.redirect(`${process.env.FRONTEND_URL}/settings?linked=google`);
+      return res.redirect(`${authEnv.frontendUrl}/settings?linked=google`);
     } catch (err) {
       if (err instanceof ConflictException) {
         return res.redirect(
-          `${process.env.FRONTEND_URL}/settings?error=google_already_linked`,
+          `${authEnv.frontendUrl}/settings?error=google_already_linked`,
         );
       }
       throw err;

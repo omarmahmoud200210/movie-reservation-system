@@ -11,33 +11,33 @@ export class MoviesRepository {
 
   /** Status defaults to DRAFT via the schema default. */
   create(data: Prisma.MovieCreateInput): Promise<Movie> {
-    return this.prisma.write.movie.create({ data });
+    return this.prisma.movie.create({ data });
   }
 
   update(id: number, data: Prisma.MovieUpdateInput): Promise<Movie> {
-    return this.prisma.write.movie.update({ where: { id }, data });
+    return this.prisma.movie.update({ where: { id }, data });
   }
 
   findById(id: number): Promise<Movie | null> {
-    return this.prisma.read.movie.findUnique({ where: { id } });
+    return this.prisma.movie.findUnique({ where: { id } });
   }
 
   setStatus(id: number, status: MovieStatus): Promise<Movie> {
-    return this.prisma.write.movie.update({ where: { id }, data: { status } });
+    return this.prisma.movie.update({ where: { id }, data: { status } });
   }
 
   delete(id: number): Promise<Movie> {
-    return this.prisma.write.movie.delete({ where: { id } });
+    return this.prisma.movie.delete({ where: { id } });
   }
 
   /** All movies including drafts (admin listing). */
   listAll(): Promise<Movie[]> {
-    return this.prisma.read.movie.findMany({ orderBy: { createdAt: 'desc' } });
+    return this.prisma.movie.findMany({ orderBy: { createdAt: 'desc' } });
   }
 
   /** A single PUBLISHED movie (drafts are invisible to the public). */
   findPublishedById(id: number): Promise<Movie | null> {
-    return this.prisma.read.movie.findFirst({
+    return this.prisma.movie.findFirst({
       where: { id, status: MovieStatus.PUBLISHED },
     });
   }
@@ -47,7 +47,7 @@ export class MoviesRepository {
    * so the service can split now-showing (has one) from coming-soon (has none).
    */
   findPublishedForBrowse(now: Date): Promise<MovieWithFutureFlag[]> {
-    return this.prisma.read.movie.findMany({
+    return this.prisma.movie.findMany({
       where: { status: MovieStatus.PUBLISHED },
       include: {
         screens: {
@@ -62,7 +62,7 @@ export class MoviesRepository {
 
   /** True if any reservation exists on any screening of this movie. */
   async hasReservations(movieId: number): Promise<boolean> {
-    const reservations = await this.prisma.read.reservation.findFirst({
+    const reservations = await this.prisma.reservation.findFirst({
       where: { screen: { movieId } },
       select: { id: true },
     });

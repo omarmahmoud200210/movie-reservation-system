@@ -4,12 +4,20 @@ import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import { AppModule } from '../../src/app.module';
 
+interface TestAppOverrides {
+  overrides?: Array<{ provide: unknown; useValue: unknown }>;
+}
+
 /** Boots the real app the same way main.ts does (prefix, cookies, pipes),
  * against a real ephemeral port so Socket.IO clients can connect. */
-export async function createTestApp(): Promise<INestApplication> {
-  const moduleRef = await Test.createTestingModule({
-    imports: [AppModule],
-  }).compile();
+export async function createTestApp(
+  opts: TestAppOverrides = {},
+): Promise<INestApplication> {
+  let builder = Test.createTestingModule({ imports: [AppModule] });
+  for (const o of opts.overrides ?? []) {
+    builder = builder.overrideProvider(o.provide as never).useValue(o.useValue);
+  }
+  const moduleRef = await builder.compile();
 
   const app = moduleRef.createNestApplication({ rawBody: true });
   app.use(cookieParser());

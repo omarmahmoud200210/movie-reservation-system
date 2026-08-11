@@ -34,7 +34,12 @@ export class ScreeningsAdminController {
   @Post()
   async create(@Body() dto: CreateScreeningDto, @CurrentUser() user: AuthUser) {
     const screening = await this.screeningsService.createScreening(dto);
-    await this.audit.record({ action: 'screening.created', actorId: user.id, targetType: 'screening', targetId: screening.id });
+    await this.audit.record({
+      action: 'screening.created',
+      actorId: user.id,
+      targetType: 'screening',
+      targetId: screening.id,
+    });
     return screening;
   }
 
@@ -45,21 +50,42 @@ export class ScreeningsAdminController {
     @CurrentUser() user: AuthUser,
   ) {
     const screening = await this.screeningsService.updateScreening(id, dto);
-    await this.audit.record({ action: 'screening.updated', actorId: user.id, targetType: 'screening', targetId: id });
+    await this.audit.record({
+      action: 'screening.updated',
+      actorId: user.id,
+      targetType: 'screening',
+      targetId: id,
+    });
     return screening;
   }
 
   @Patch(':id/cancel')
-  async cancel(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: AuthUser) {
+  async cancel(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthUser,
+  ) {
     const screening = await this.screeningsService.cancelScreening(id);
-    await this.audit.record({ action: 'screening.cancelled', actorId: user.id, targetType: 'screening', targetId: id });
+    await this.audit.record({
+      action: 'screening.cancelled',
+      actorId: user.id,
+      targetType: 'screening',
+      targetId: id,
+    });
     return screening;
   }
 
   @Delete(':id')
-  async remove(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: AuthUser) {
+  async remove(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthUser,
+  ) {
     const result = await this.screeningsService.deleteScreening(id);
-    await this.audit.record({ action: 'screening.deleted', actorId: user.id, targetType: 'screening', targetId: id });
+    await this.audit.record({
+      action: 'screening.deleted',
+      actorId: user.id,
+      targetType: 'screening',
+      targetId: id,
+    });
     return result;
   }
 }

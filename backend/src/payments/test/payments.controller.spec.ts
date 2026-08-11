@@ -50,7 +50,10 @@ describe('PaymentsController', () => {
     it('handleWebhook -> service with raw body and signature header', async () => {
       const req = {
         rawBody: Buffer.from('{}'),
-        headers: { 'stripe-signature': 'sig_1', 'content-type': 'application/json' },
+        headers: {
+          'stripe-signature': 'sig_1',
+          'content-type': 'application/json',
+        },
       } as never;
       mockService.handleWebhookEvent.mockResolvedValue({ received: true });
 

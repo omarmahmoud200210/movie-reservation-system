@@ -53,7 +53,11 @@ export class UsersService {
     );
     const code = await this.otp.issue(newEmail);
     await this.mailer.sendOtpEmail(newEmail, code);
-    await this.audit.record({ action: 'email.change.requested', actorId: userId, metadata: { newEmail } });
+    await this.audit.record({
+      action: 'email.change.requested',
+      actorId: userId,
+      metadata: { newEmail },
+    });
     return { message: 'Verification code sent to new email' };
   }
 

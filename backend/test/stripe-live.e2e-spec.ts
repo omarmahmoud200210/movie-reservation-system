@@ -14,10 +14,18 @@ import { PrismaClient, ReservationStatus } from '@prisma/client';
 import { createTestApp, baseUrl } from './support/app';
 import { resetState, closeRedis } from './support/db';
 import { createAuthedUser } from './support/auth';
-import { createHallWithSeats, createPublishedMovie, createScreening } from './support/fixtures';
+import {
+  createHallWithSeats,
+  createPublishedMovie,
+  createScreening,
+} from './support/fixtures';
 import { connectSocket, joinScreening, waitForEvent } from './support/socket';
 import { createTestPrismaClient } from './support/prisma';
-import { startWebhookRelay, triggerCheckoutCompleted, WebhookRelay } from './support/stripe-cli';
+import {
+  startWebhookRelay,
+  triggerCheckoutCompleted,
+  WebhookRelay,
+} from './support/stripe-cli';
 
 describe('Payments (live Stripe e2e)', () => {
   let app: INestApplication;
@@ -29,7 +37,10 @@ describe('Payments (live Stripe e2e)', () => {
     prisma = createTestPrismaClient();
 
     const apiKey = process.env.STRIPE_SECRET_KEY as string;
-    relay = await startWebhookRelay(`${baseUrl(app)}/api/v1/payments/webhook`, apiKey);
+    relay = await startWebhookRelay(
+      `${baseUrl(app)}/api/v1/payments/webhook`,
+      apiKey,
+    );
     process.env.STRIPE_WEBHOOK_SECRET = relay.webhookSecret;
   });
 
@@ -45,7 +56,10 @@ describe('Payments (live Stripe e2e)', () => {
   });
 
   it('a real checkout session, completed via a real Stripe-relayed webhook, confirms the reservation and broadcasts seat:booked', async () => {
-    const { hall, seats } = await createHallWithSeats(prisma, { rows: 1, seatsPerRow: 1 });
+    const { hall, seats } = await createHallWithSeats(prisma, {
+      rows: 1,
+      seatsPerRow: 1,
+    });
     const movie = await createPublishedMovie(prisma);
     const screening = await createScreening(prisma, {
       movieId: movie.id,
@@ -67,14 +81,23 @@ describe('Payments (live Stripe e2e)', () => {
     expect(checkoutRes.status).toBe(201);
     expect(checkoutRes.body.url).toMatch(/^https:\/\/checkout\.stripe\.com\//);
 
-    const payment = await prisma.payment.findUniqueOrThrow({ where: { reservationId } });
+    const payment = await prisma.payment.findUniqueOrThrow({
+      where: { reservationId },
+    });
 
     const socket = await connectSocket(baseUrl(app));
     try {
       await joinScreening(socket, screening.id);
-      const broadcast = waitForEvent<{ seatIds: number[] }>(socket, 'seat:booked', 30_000);
+      const broadcast = waitForEvent<{ seatIds: number[] }>(
+        socket,
+        'seat:booked',
+        30_000,
+      );
 
-      triggerCheckoutCompleted(payment.id, process.env.STRIPE_SECRET_KEY as string);
+      triggerCheckoutCompleted(
+        payment.id,
+        process.env.STRIPE_SECRET_KEY as string,
+      );
 
       const payload = await broadcast;
       expect(payload.seatIds).toEqual([seats[0].id]);

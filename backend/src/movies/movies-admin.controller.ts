@@ -36,35 +36,73 @@ export class MoviesAdminController {
   @Post('movies')
   async create(@Body() dto: CreateMovieDto, @CurrentUser() user: AuthUser) {
     const movie = await this.moviesService.createMovie(dto);
-    await this.audit.record({ action: 'movie.created', actorId: user.id, targetType: 'movie', targetId: movie.id });
+    await this.audit.record({
+      action: 'movie.created',
+      actorId: user.id,
+      targetType: 'movie',
+      targetId: movie.id,
+    });
     return movie;
   }
 
   @Patch('movies/:id')
-  async update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateMovieDto, @CurrentUser() user: AuthUser) {
+  async update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateMovieDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     const movie = await this.moviesService.updateMovie(id, dto);
-    await this.audit.record({ action: 'movie.updated', actorId: user.id, targetType: 'movie', targetId: id });
+    await this.audit.record({
+      action: 'movie.updated',
+      actorId: user.id,
+      targetType: 'movie',
+      targetId: id,
+    });
     return movie;
   }
 
   @Patch('movies/:id/publish')
-  async publish(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: AuthUser) {
+  async publish(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthUser,
+  ) {
     const movie = await this.moviesService.publish(id);
-    await this.audit.record({ action: 'movie.published', actorId: user.id, targetType: 'movie', targetId: id });
+    await this.audit.record({
+      action: 'movie.published',
+      actorId: user.id,
+      targetType: 'movie',
+      targetId: id,
+    });
     return movie;
   }
 
   @Patch('movies/:id/unpublish')
-  async unpublish(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: AuthUser) {
+  async unpublish(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthUser,
+  ) {
     const movie = await this.moviesService.unpublish(id);
-    await this.audit.record({ action: 'movie.unpublished', actorId: user.id, targetType: 'movie', targetId: id });
+    await this.audit.record({
+      action: 'movie.unpublished',
+      actorId: user.id,
+      targetType: 'movie',
+      targetId: id,
+    });
     return movie;
   }
 
   @Delete('movies/:id')
-  async remove(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: AuthUser) {
+  async remove(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() user: AuthUser,
+  ) {
     const result = await this.moviesService.deleteMovie(id);
-    await this.audit.record({ action: 'movie.deleted', actorId: user.id, targetType: 'movie', targetId: id });
+    await this.audit.record({
+      action: 'movie.deleted',
+      actorId: user.id,
+      targetType: 'movie',
+      targetId: id,
+    });
     return result;
   }
 

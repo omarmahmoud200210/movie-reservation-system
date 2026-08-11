@@ -40,6 +40,12 @@ load-test/
 ├── seed.ts                    ← Prisma script that creates test data (2,500 users, screenings, seats)
 ├── seed-output.json           ← IDs produced by the seed script, consumed by processor.js
 ├── processor.js               ← Custom Artillery hooks (auth, seat picking, result logging)
+├── bulk-seed-sql.ts           ← Runner for the millions-of-rows dataset (see section below)
+├── bulk-seed-analyze.ts       ← EXPLAIN (ANALYZE, BUFFERS) probes against the large dataset
+├── sql/                       ← Pure-SQL generation scripts for the large dataset
+│   ├── 00-reset.sql
+│   ├── 01-refund-policy.sql … 09-payments-failed.sql
+│   └── 10-analyze.sql
 └── scenarios/
     ├── mixed-read-write.yml       ← Scenario 1: Baseline mixed traffic
     ├── hot-seat-contention.yml    ← Scenario 2: 100 users → 1 seat
@@ -254,6 +260,45 @@ Layer 3 — Reliability:   soak-mixed → spike-recovery
 ```
 
 No point stress-testing capacity if your concurrency control is broken. No point running a 15-minute soak if the system can't handle 1 minute of normal traffic.
+
+## Bulk Dataset (Millions of Rows)
+
+The load-test scenarios above use the small `seed.ts` dataset (2,500 users). To
+practice database scaling decisions, use the **pure-SQL bulk loader** to build a
+~10M-row reservation table (~3M payments) with valid foreign keys.
+
+### How it works
+
+All data generation lives in `sql/` as plain SQL using `generate_series()` +
+`random()`. Each file is one statement, numbered in FK load order. The runner
+`bulk-seed-sql.ts` just connects, calls `setseed(0.42)` for reproducible data,
+executes the files in order, and prints final counts.
+
+The only knob is screening count (`__SCREENINGS__` token in `06-screenings.sql`):
+reservations are exactly one row per (screening, seat), so ~67,000 screenings
+≈ 10M reservations.
+
+### Commands
+
+```bash
+npm run db:bulk-seed -- --smoke              # ~100k reservations, quick sanity run
+npm run db:bulk-seed -- --clean              # TRUNCATE all tables, then load ~10M
+npm run db:bulk-seed -- --reservations 10000 # target a specific reservation count
+npm run db:bulk-seed:analyze                 # EXPLAIN ANALYZE on the app's hot queries
+```
+
+### Learning workflow
+
+```
+1. npm run db:bulk-seed -- --clean          # load ~10M rows
+2. npm run db:bulk-seed:analyze             # see which queries seq-scan vs use indexes
+3. Add/move an index (see scalability gaps)
+4. npm run db:bulk-seed -- --clean          # reload the same dataset (fixed seed)
+5. npm run db:bulk-seed:analyze             # compare before/after
+```
+
+> **Warning:** `--clean` destroys all data in the database. Do not run it
+> against a database you care about.
 
 ## Prerequisites
 

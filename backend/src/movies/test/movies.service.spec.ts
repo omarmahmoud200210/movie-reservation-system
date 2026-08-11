@@ -220,7 +220,10 @@ describe('MoviesService', () => {
     });
 
     it('splits a mixed set into both buckets', async () => {
-      mockRepo.findPublishedForBrowse.mockResolvedValue([withScreens, noScreens]);
+      mockRepo.findPublishedForBrowse.mockResolvedValue([
+        withScreens,
+        noScreens,
+      ]);
 
       const result = await service.browseMovies();
 
@@ -229,7 +232,10 @@ describe('MoviesService', () => {
     });
 
     it('strips the screens marker from the returned movies', async () => {
-      mockRepo.findPublishedForBrowse.mockResolvedValue([withScreens, noScreens]);
+      mockRepo.findPublishedForBrowse.mockResolvedValue([
+        withScreens,
+        noScreens,
+      ]);
 
       const result = await service.browseMovies();
 

@@ -4,7 +4,11 @@ import { PrismaClient, PaymentStatus, ReservationStatus } from '@prisma/client';
 import { createTestApp, baseUrl } from './support/app';
 import { resetState, closeRedis } from './support/db';
 import { createAuthedUser } from './support/auth';
-import { createHallWithSeats, createPublishedMovie, createScreening } from './support/fixtures';
+import {
+  createHallWithSeats,
+  createPublishedMovie,
+  createScreening,
+} from './support/fixtures';
 import { connectSocket, joinScreening, waitForEvent } from './support/socket';
 import { signWebhookPayload } from './support/stripe-webhook';
 import { createTestPrismaClient } from './support/prisma';
@@ -22,7 +26,8 @@ describe('Payments (e2e)', () => {
     app = await createTestApp();
     prisma = createTestPrismaClient();
     const paymentsService = app.get(PaymentsService);
-    stripeMock = (paymentsService as unknown as { stripe: typeof stripeMock }).stripe;
+    stripeMock = (paymentsService as unknown as { stripe: typeof stripeMock })
+      .stripe;
   });
 
   afterAll(async () => {
@@ -37,9 +42,16 @@ describe('Payments (e2e)', () => {
   });
 
   async function seedHeldReservation(startTime: Date) {
-    const { hall, seats } = await createHallWithSeats(prisma, { rows: 1, seatsPerRow: 1 });
+    const { hall, seats } = await createHallWithSeats(prisma, {
+      rows: 1,
+      seatsPerRow: 1,
+    });
     const movie = await createPublishedMovie(prisma);
-    const screening = await createScreening(prisma, { movieId: movie.id, hallId: hall.id, startTime });
+    const screening = await createScreening(prisma, {
+      movieId: movie.id,
+      hallId: hall.id,
+      startTime,
+    });
     const user = await createAuthedUser(prisma);
 
     const reserveRes = await request(app.getHttpServer())
@@ -47,11 +59,18 @@ describe('Payments (e2e)', () => {
       .set('Cookie', user.cookie)
       .send({ screeningId: screening.id, seatId: seats[0].id });
 
-    return { user, screening, seat: seats[0], reservationId: reserveRes.body.id as number };
+    return {
+      user,
+      screening,
+      seat: seats[0],
+      reservationId: reserveRes.body.id as number,
+    };
   }
 
   it('creates a checkout session and extends the hold', async () => {
-    const { user, reservationId } = await seedHeldReservation(new Date(Date.now() + 72 * 60 * 60_000));
+    const { user, reservationId } = await seedHeldReservation(
+      new Date(Date.now() + 72 * 60 * 60_000),
+    );
     stripeMock.checkout.sessions.create.mockResolvedValue({
       id: 'cs_test_1',
       url: 'https://checkout.stripe.com/cs_test_1',
@@ -65,7 +84,9 @@ describe('Payments (e2e)', () => {
     expect(res.status).toBe(201);
     expect(res.body.url).toBe('https://checkout.stripe.com/cs_test_1');
 
-    const payment = await prisma.payment.findUniqueOrThrow({ where: { reservationId } });
+    const payment = await prisma.payment.findUniqueOrThrow({
+      where: { reservationId },
+    });
     expect(payment.stripeSessionId).toBe('cs_test_1');
   });
 
@@ -82,12 +103,17 @@ describe('Payments (e2e)', () => {
       .set('Cookie', user.cookie)
       .send({ reservationId });
 
-    const payment = await prisma.payment.findUniqueOrThrow({ where: { reservationId } });
+    const payment = await prisma.payment.findUniqueOrThrow({
+      where: { reservationId },
+    });
 
     const socket = await connectSocket(baseUrl(app));
     try {
       await joinScreening(socket, screening.id);
-      const broadcast = waitForEvent<{ seatIds: number[] }>(socket, 'seat:booked');
+      const broadcast = waitForEvent<{ seatIds: number[] }>(
+        socket,
+        'seat:booked',
+      );
 
       const { body, signature } = signWebhookPayload({
         id: 'evt_test_1',
@@ -130,13 +156,17 @@ describe('Payments (e2e)', () => {
       .post('/api/v1/payments/webhook')
       .set('stripe-signature', 'not_a_real_signature')
       .set('Content-Type', 'application/json')
-      .send(JSON.stringify({ id: 'evt_bad', type: 'checkout.session.completed' }));
+      .send(
+        JSON.stringify({ id: 'evt_bad', type: 'checkout.session.completed' }),
+      );
 
     expect(res.status).toBe(400);
   });
 
   it('cancelling a CONFIRMED reservation >48h out refunds in full via Stripe and cancels it', async () => {
-    const { user, reservationId } = await seedHeldReservation(new Date(Date.now() + 72 * 60 * 60_000));
+    const { user, reservationId } = await seedHeldReservation(
+      new Date(Date.now() + 72 * 60 * 60_000),
+    );
     stripeMock.checkout.sessions.create.mockResolvedValue({
       id: 'cs_test_4',
       url: 'https://checkout.stripe.com/cs_test_4',
@@ -146,7 +176,9 @@ describe('Payments (e2e)', () => {
       .set('Cookie', user.cookie)
       .send({ reservationId });
 
-    const payment = await prisma.payment.findUniqueOrThrow({ where: { reservationId } });
+    const payment = await prisma.payment.findUniqueOrThrow({
+      where: { reservationId },
+    });
     const { body, signature } = signWebhookPayload({
       id: 'evt_test_confirm',
       type: 'checkout.session.completed',
@@ -177,7 +209,9 @@ describe('Payments (e2e)', () => {
       expect.anything(),
     );
 
-    const refundedPayment = await prisma.payment.findUniqueOrThrow({ where: { reservationId } });
+    const refundedPayment = await prisma.payment.findUniqueOrThrow({
+      where: { reservationId },
+    });
     expect(refundedPayment.status).toBe(PaymentStatus.REFUNDED);
   });
 
@@ -203,7 +237,10 @@ describe('Payments (e2e)', () => {
     const socket = await connectSocket(baseUrl(app));
     try {
       await joinScreening(socket, screening.id);
-      const broadcast = waitForEvent<{ seatIds: number[] }>(socket, 'seat:booked');
+      const broadcast = waitForEvent<{ seatIds: number[] }>(
+        socket,
+        'seat:booked',
+      );
 
       const paymentsService = app.get(PaymentsService);
       await paymentsService.reconcileTimedOutPayments();
@@ -211,7 +248,9 @@ describe('Payments (e2e)', () => {
       const payload = await broadcast;
       expect(payload.seatIds).toEqual([seat.id]);
 
-      const reconciled = await prisma.payment.findUniqueOrThrow({ where: { id: payment.id } });
+      const reconciled = await prisma.payment.findUniqueOrThrow({
+        where: { id: payment.id },
+      });
       expect(reconciled.status).toBe(PaymentStatus.SUCCEEDED);
     } finally {
       socket.disconnect();

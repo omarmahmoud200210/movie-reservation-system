@@ -4,8 +4,10 @@ import { JwtService } from '@nestjs/jwt';
 import type { Response } from 'express';
 import { randomUUID } from 'crypto';
 
+import { UserRole } from '@prisma/client';
 import { TokenService } from '../token.service';
 import RedisCache from '../../redis/redis.cache';
+import { authEnv } from '../auth-env.config';
 
 jest.mock('crypto', () => ({
   ...jest.requireActual<typeof import('crypto')>('crypto'),
@@ -23,7 +25,7 @@ const user = {
   id: 1,
   email: 'john@example.com',
   name: 'John Doe',
-  role: 'USER',
+  role: UserRole.USER,
 };
 
 const mockJwt = {
@@ -31,11 +33,26 @@ const mockJwt = {
   verify: jest.fn(),
 };
 
+const mockMulti = {
+  set: jest.fn().mockReturnThis(),
+  sadd: jest.fn().mockReturnThis(),
+  incr: jest.fn().mockReturnThis(),
+  expire: jest.fn().mockReturnThis(),
+  exec: jest.fn().mockResolvedValue([]),
+};
+
+const mockClient = {
+  eval: jest.fn(),
+  smembers: jest.fn(),
+  del: jest.fn(),
+  multi: jest.fn().mockReturnValue(mockMulti),
+};
+
 const mockRedis = {
   set: jest.fn(),
   get: jest.fn(),
   del: jest.fn(),
-  getClient: jest.fn(),
+  getClient: jest.fn().mockReturnValue(mockClient),
 };
 
 describe('TokenService', () => {
@@ -44,15 +61,11 @@ describe('TokenService', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
-
-    process.env.JWT_ACCESS_SECRET = 'access-secret';
-    process.env.JWT_ACCESS_EXPIRES_IN = '15m';
-    process.env.JWT_REFRESH_SECRET = 'refresh-secret';
-    process.env.JWT_REFRESH_EXPIRES_IN = '7d';
-    process.env.FRONTEND_URL = 'http://localhost:5173';
-    process.env.COOKIE_DOMAIN = 'localhost';
-    process.env.LINK_STATE_SECRET = 'link-state-secret';
-    process.env.NODE_ENV = 'test';
+    mockRedis.getClient.mockReturnValue(mockClient);
+    mockClient.multi.mockReturnValue(mockMulti);
+    mockMulti.set.mockReturnThis();
+    mockMulti.sadd.mockReturnThis();
+    mockMulti.exec.mockResolvedValue([]);
 
     (randomUUID as jest.Mock).mockReturnValue(FIXED_JTI);
     // signAccess is called before signRefresh in issueAuthCookies.
@@ -78,8 +91,17 @@ describe('TokenService', () => {
 
       expect(mockJwt.sign).toHaveBeenNthCalledWith(
         1,
-        { sub: user.id, name: user.name, email: user.email, role: user.role, ver: 0 },
-        { secret: 'access-secret', expiresIn: '15m' },
+        {
+          sub: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          ver: 0,
+        },
+        {
+          secret: authEnv.jwtAccessSecret,
+          expiresIn: authEnv.jwtAccessExpiresIn,
+        },
       );
     });
 
@@ -89,18 +111,25 @@ describe('TokenService', () => {
       expect(mockJwt.sign).toHaveBeenNthCalledWith(
         2,
         { sub: user.id, jti: FIXED_JTI },
-        { secret: 'refresh-secret', expiresIn: '7d' },
+        {
+          secret: authEnv.jwtRefreshSecret,
+          expiresIn: authEnv.jwtRefreshExpiresIn,
+        },
       );
     });
 
     it('persists the refresh jti in redis with the correct key and ttl', async () => {
       await service.issueAuthCookies(res as unknown as Response, user);
 
-      expect(mockRedis.set).toHaveBeenCalledWith(
+      expect(mockMulti.set).toHaveBeenCalledWith(
         `refresh:${user.id}:${FIXED_JTI}`,
         '1',
         'EX',
         REFRESH_TTL_SECONDS,
+      );
+      expect(mockMulti.sadd).toHaveBeenCalledWith(
+        `refresh_sessions:${user.id}`,
+        FIXED_JTI,
       );
     });
 
@@ -122,21 +151,27 @@ describe('TokenService', () => {
 
   describe('rotateAuthCookies', () => {
     const payload = { id: user.id, jti: 'old-jti' };
-    const mockClient = { eval: jest.fn() };
 
     it('deletes the old refresh key and issues fresh cookies when the key exists', async () => {
       mockRedis.getClient.mockReturnValue(mockClient);
       mockClient.eval.mockResolvedValue([1]);
 
-      await service.rotateAuthCookies(res as unknown as Response, payload, user);
+      await service.rotateAuthCookies(
+        res as unknown as Response,
+        payload,
+        user,
+      );
 
       expect(mockRedis.getClient).toHaveBeenCalled();
       expect(mockClient.eval).toHaveBeenCalledWith(
         expect.stringContaining('redis.call'),
-        1,
+        2,
         `refresh:${payload.id}:${payload.jti}`,
+        `refresh_sessions:${user.id}`,
         `refresh:${user.id}:${FIXED_JTI}`,
         String(REFRESH_TTL_SECONDS),
+        payload.jti,
+        FIXED_JTI,
       );
       expect(res.cookie).toHaveBeenCalledTimes(2);
     });
@@ -189,7 +224,7 @@ describe('TokenService', () => {
 
       expect(mockJwt.sign).toHaveBeenCalledWith(
         { sub: user.id },
-        { secret: 'link-state-secret', expiresIn: '10m' },
+        { secret: authEnv.linkStateSecret, expiresIn: '10m' },
       );
       expect(result).toBe('state-token');
     });
@@ -202,7 +237,7 @@ describe('TokenService', () => {
       const result = service.verifyLinkState('state-token');
 
       expect(mockJwt.verify).toHaveBeenCalledWith('state-token', {
-        secret: 'link-state-secret',
+        secret: authEnv.linkStateSecret,
       });
       expect(result).toEqual({ id: user.id });
     });
@@ -229,36 +264,36 @@ describe('TokenService', () => {
     it('clears the access and refresh cookies (refresh with its path)', () => {
       service.clearAuthCookies(res as unknown as Response);
 
-      expect(res.clearCookie).toHaveBeenCalledWith('access_token');
-      expect(res.clearCookie).toHaveBeenCalledWith('refresh_token', {
-        path: REFRESH_COOKIE_PATH,
-      });
+      expect(res.clearCookie).toHaveBeenCalledWith(
+        'access_token',
+        expect.objectContaining({ domain: 'localhost' }),
+      );
+      expect(res.clearCookie).toHaveBeenCalledWith(
+        'refresh_token',
+        expect.objectContaining({
+          path: REFRESH_COOKIE_PATH,
+          domain: 'localhost',
+        }),
+      );
     });
   });
 
   describe('revokeAllSessions', () => {
     it('deletes every refresh key matching the user when keys exist', async () => {
-      const mockClient = {
-        keys: jest.fn().mockResolvedValue(['refresh:1:jti-a', 'refresh:1:jti-b']),
-        del: jest.fn(),
-      };
-      mockRedis.getClient.mockReturnValue(mockClient);
+      mockClient.smembers.mockResolvedValue(['jti-a', 'jti-b']);
 
       await service.revokeAllSessions(1);
 
-      expect(mockClient.keys).toHaveBeenCalledWith('refresh:1:*');
+      expect(mockClient.smembers).toHaveBeenCalledWith('refresh_sessions:1');
       expect(mockClient.del).toHaveBeenCalledWith(
         'refresh:1:jti-a',
         'refresh:1:jti-b',
+        'refresh_sessions:1',
       );
     });
 
     it('no-ops cleanly when there are no matching keys', async () => {
-      const mockClient = {
-        keys: jest.fn().mockResolvedValue([]),
-        del: jest.fn(),
-      };
-      mockRedis.getClient.mockReturnValue(mockClient);
+      mockClient.smembers.mockResolvedValue([]);
 
       await service.revokeAllSessions(1);
 

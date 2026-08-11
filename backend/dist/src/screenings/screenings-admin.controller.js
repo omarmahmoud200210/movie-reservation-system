@@ -31,22 +31,42 @@ let ScreeningsAdminController = class ScreeningsAdminController {
     }
     async create(dto, user) {
         const screening = await this.screeningsService.createScreening(dto);
-        await this.audit.record({ action: 'screening.created', actorId: user.id, targetType: 'screening', targetId: screening.id });
+        await this.audit.record({
+            action: 'screening.created',
+            actorId: user.id,
+            targetType: 'screening',
+            targetId: screening.id,
+        });
         return screening;
     }
     async update(id, dto, user) {
         const screening = await this.screeningsService.updateScreening(id, dto);
-        await this.audit.record({ action: 'screening.updated', actorId: user.id, targetType: 'screening', targetId: id });
+        await this.audit.record({
+            action: 'screening.updated',
+            actorId: user.id,
+            targetType: 'screening',
+            targetId: id,
+        });
         return screening;
     }
     async cancel(id, user) {
         const screening = await this.screeningsService.cancelScreening(id);
-        await this.audit.record({ action: 'screening.cancelled', actorId: user.id, targetType: 'screening', targetId: id });
+        await this.audit.record({
+            action: 'screening.cancelled',
+            actorId: user.id,
+            targetType: 'screening',
+            targetId: id,
+        });
         return screening;
     }
     async remove(id, user) {
         const result = await this.screeningsService.deleteScreening(id);
-        await this.audit.record({ action: 'screening.deleted', actorId: user.id, targetType: 'screening', targetId: id });
+        await this.audit.record({
+            action: 'screening.deleted',
+            actorId: user.id,
+            targetType: 'screening',
+            targetId: id,
+        });
         return result;
     }
 };

@@ -18,33 +18,36 @@ export class ScreeningsRepository {
 
   /** Status defaults to SCHEDULED via the schema default. */
   create(data: Prisma.ScreeningUncheckedCreateInput): Promise<Screening> {
-    return this.prisma.write.screening.create({ data });
+    return this.prisma.screening.create({ data });
   }
 
   update(
     id: number,
     data: Prisma.ScreeningUncheckedUpdateInput,
   ): Promise<Screening> {
-    return this.prisma.write.screening.update({ where: { id }, data });
+    return this.prisma.screening.update({ where: { id }, data });
   }
 
   findById(id: number): Promise<ScreeningWithMovieHall | null> {
-    return this.prisma.read.screening.findUnique({
+    return this.prisma.screening.findUnique({
       where: { id },
       include: { movie: true, hall: true },
     });
   }
 
   setStatus(id: number, status: ScreenStatus): Promise<Screening> {
-    return this.prisma.write.screening.update({ where: { id }, data: { status } });
+    return this.prisma.screening.update({
+      where: { id },
+      data: { status },
+    });
   }
 
   delete(id: number): Promise<Screening> {
-    return this.prisma.write.screening.delete({ where: { id } });
+    return this.prisma.screening.delete({ where: { id } });
   }
 
   async hasReservations(screeningId: number): Promise<boolean> {
-    const reservation = await this.prisma.read.reservation.findFirst({
+    const reservation = await this.prisma.reservation.findFirst({
       where: { screeningId },
       select: { id: true },
     });
@@ -66,7 +69,7 @@ export class ScreeningsRepository {
     end: Date,
     excludeId?: number,
   ): Promise<Screening[]> {
-    const candidates = await this.prisma.read.screening.findMany({
+    const candidates = await this.prisma.screening.findMany({
       where: {
         hallId,
         status: { not: ScreenStatus.CANCELLED },
@@ -91,7 +94,7 @@ export class ScreeningsRepository {
    * selection UI. Ordered by start time.
    */
   findFutureScheduledByMovie(movieId: number, now: Date) {
-    return this.prisma.read.screening.findMany({
+    return this.prisma.screening.findMany({
       where: {
         movieId,
         status: ScreenStatus.SCHEDULED,
@@ -109,7 +112,7 @@ export class ScreeningsRepository {
 
   /** Every seat of a hall, ordered for a stable seat-map layout. */
   findSeatsByHall(hallId: number): Promise<Seat[]> {
-    return this.prisma.read.seat.findMany({
+    return this.prisma.seat.findMany({
       where: { hallId },
       orderBy: [{ row: 'asc' }, { id: 'asc' }],
     });
@@ -122,7 +125,7 @@ export class ScreeningsRepository {
   findActiveReservations(
     screeningId: number,
   ): Promise<{ seatId: number; status: ReservationStatus }[]> {
-    return this.prisma.read.reservation.findMany({
+    return this.prisma.reservation.findMany({
       where: {
         screeningId,
         status: {

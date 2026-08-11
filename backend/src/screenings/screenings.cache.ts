@@ -76,9 +76,7 @@ export class ScreeningsCache {
 
   // ── Screening detail ────────────────────────────────────────────────
 
-  async getScreeningDetail(
-    id: number,
-  ): Promise<ScreeningWithMovieHall | null> {
+  async getScreeningDetail(id: number): Promise<ScreeningWithMovieHall | null> {
     try {
       const raw = await this.redis.get(screeningDetailKey(id));
       return raw ? (JSON.parse(raw) as ScreeningWithMovieHall) : null;
@@ -109,17 +107,13 @@ export class ScreeningsCache {
     try {
       await this.redis.del(screeningDetailKey(id));
     } catch (err) {
-      this.logger.warn(
-        `delScreeningDetail(${id}) failed: ${String(err)}`,
-      );
+      this.logger.warn(`delScreeningDetail(${id}) failed: ${String(err)}`);
     }
   }
 
   // ── Future screenings by movie ──────────────────────────────────────
 
-  async getMovieScreenings(
-    movieId: number,
-  ): Promise<FutureScreening[] | null> {
+  async getMovieScreenings(movieId: number): Promise<FutureScreening[] | null> {
     try {
       const raw = await this.redis.get(movieScreeningsKey(movieId));
       return raw ? (JSON.parse(raw) as FutureScreening[]) : null;
@@ -131,7 +125,10 @@ export class ScreeningsCache {
     }
   }
 
-  async setMovieScreenings(movieId: number, screenings: FutureScreening[]): Promise<void> {
+  async setMovieScreenings(
+    movieId: number,
+    screenings: FutureScreening[],
+  ): Promise<void> {
     try {
       await this.redis.set(
         movieScreeningsKey(movieId),
@@ -140,9 +137,7 @@ export class ScreeningsCache {
         MOVIE_SCREENINGS_TTL_SECONDS,
       );
     } catch (err) {
-      this.logger.warn(
-        `setMovieScreenings(${movieId}) failed: ${String(err)}`,
-      );
+      this.logger.warn(`setMovieScreenings(${movieId}) failed: ${String(err)}`);
     }
   }
 
@@ -150,9 +145,7 @@ export class ScreeningsCache {
     try {
       await this.redis.del(movieScreeningsKey(movieId));
     } catch (err) {
-      this.logger.warn(
-        `delMovieScreenings(${movieId}) failed: ${String(err)}`,
-      );
+      this.logger.warn(`delMovieScreenings(${movieId}) failed: ${String(err)}`);
     }
   }
 

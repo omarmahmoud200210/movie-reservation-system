@@ -5,6 +5,7 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { ROLES_KEY } from '../../common/decorators/roles.decorator';
 import { AuditService } from '../../common/services/audit.service';
+import { UserRole } from '@prisma/client';
 
 const mockService = {
   createScreening: jest.fn(),
@@ -17,7 +18,7 @@ const mockAuditService = {
   record: jest.fn(),
 };
 
-const user = { id: 1, email: 'admin@test.com', name: 'Admin', role: 'ADMIN' };
+const user = { id: 1, email: 'admin@test.com', name: 'Admin', role: UserRole.ADMIN };
 
 const GUARDS_METADATA = '__guards__';
 

@@ -14,6 +14,7 @@ const common_1 = require("@nestjs/common");
 const passport_1 = require("@nestjs/passport");
 const passport_jwt_1 = require("passport-jwt");
 const token_service_1 = require("../token.service");
+const auth_env_config_1 = require("../auth-env.config");
 let JwtStrategy = class JwtStrategy extends (0, passport_1.PassportStrategy)(passport_jwt_1.Strategy, 'jwt') {
     tokenService;
     constructor(tokenService) {
@@ -23,7 +24,7 @@ let JwtStrategy = class JwtStrategy extends (0, passport_1.PassportStrategy)(pas
                     null,
             ]),
             ignoreExpiration: false,
-            secretOrKey: process.env.JWT_ACCESS_SECRET,
+            secretOrKey: auth_env_config_1.authEnv.jwtAccessSecret,
         });
         this.tokenService = tokenService;
     }
@@ -32,7 +33,12 @@ let JwtStrategy = class JwtStrategy extends (0, passport_1.PassportStrategy)(pas
         if (payload.ver < currentVersion) {
             throw new common_1.UnauthorizedException('Token revoked — please log in again');
         }
-        return { id: payload.sub, email: payload.email, role: payload.role, name: payload.name };
+        return {
+            id: payload.sub,
+            email: payload.email,
+            role: payload.role,
+            name: payload.name,
+        };
     }
 };
 exports.JwtStrategy = JwtStrategy;

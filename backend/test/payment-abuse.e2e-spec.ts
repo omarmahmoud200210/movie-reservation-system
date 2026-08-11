@@ -5,7 +5,11 @@ import { PrismaClient } from '@prisma/client';
 import { createTestApp } from './support/app';
 import { resetState, closeRedis } from './support/db';
 import { createAuthedUser } from './support/auth';
-import { createHallWithSeats, createPublishedMovie, createScreening } from './support/fixtures';
+import {
+  createHallWithSeats,
+  createPublishedMovie,
+  createScreening,
+} from './support/fixtures';
 import { createTestPrismaClient } from './support/prisma';
 import PaymentAbuseService from '../src/redis/payment-abuse.service';
 
@@ -30,14 +34,19 @@ describe('Payment abuse lockout (e2e)', () => {
 
   it('locks out reservation creation after 3 recorded payment failures', async () => {
     const user = await createAuthedUser(prisma);
-    const { hall } = await createHallWithSeats(prisma, { rows: 1, seatsPerRow: 1 });
+    const { hall } = await createHallWithSeats(prisma, {
+      rows: 1,
+      seatsPerRow: 1,
+    });
     const movie = await createPublishedMovie(prisma);
     const screening = await createScreening(prisma, {
       movieId: movie.id,
       hallId: hall.id,
       startTime: new Date(Date.now() + 24 * 60 * 60_000),
     });
-    const seat = (await prisma.seat.findMany({ where: { hallId: hall.id } }))[0];
+    const seat = (
+      await prisma.seat.findMany({ where: { hallId: hall.id } })
+    )[0];
 
     const paymentAbuse = app.get(PaymentAbuseService);
     await paymentAbuse.recordFailure(user.id);
@@ -54,14 +63,19 @@ describe('Payment abuse lockout (e2e)', () => {
 
   it('does not lock out a user under the 3-failure threshold', async () => {
     const user = await createAuthedUser(prisma);
-    const { hall } = await createHallWithSeats(prisma, { rows: 1, seatsPerRow: 1 });
+    const { hall } = await createHallWithSeats(prisma, {
+      rows: 1,
+      seatsPerRow: 1,
+    });
     const movie = await createPublishedMovie(prisma);
     const screening = await createScreening(prisma, {
       movieId: movie.id,
       hallId: hall.id,
       startTime: new Date(Date.now() + 24 * 60 * 60_000),
     });
-    const seat = (await prisma.seat.findMany({ where: { hallId: hall.id } }))[0];
+    const seat = (
+      await prisma.seat.findMany({ where: { hallId: hall.id } })
+    )[0];
 
     const paymentAbuse = app.get(PaymentAbuseService);
     await paymentAbuse.recordFailure(user.id);

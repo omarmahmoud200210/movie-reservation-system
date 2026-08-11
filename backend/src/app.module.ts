@@ -1,4 +1,9 @@
-import { Module, MiddlewareConsumer, NestModule, RequestMethod } from '@nestjs/common';
+import {
+  Module,
+  MiddlewareConsumer,
+  NestModule,
+  RequestMethod,
+} from '@nestjs/common';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { IpRateLimitMiddleware } from './common/middleware/ip-rate-limit.middleware';
 import { MetricsInterceptor } from './common/interceptors/metrics.interceptor';
@@ -45,13 +50,15 @@ import { PaymentsModule } from './payments/payments.module';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {
-    consumer.apply(IpRateLimitMiddleware).forRoutes(
-      { path: 'auth/login', method: RequestMethod.POST },
-      { path: 'movies', method: RequestMethod.GET },
-      { path: 'auth/register', method: RequestMethod.POST },
-      { path: 'auth/verify-otp', method: RequestMethod.POST },
-      { path: 'auth/resend-otp', method: RequestMethod.POST },
-      { path: 'auth/refresh', method: RequestMethod.POST },
-    );
+    consumer
+      .apply(IpRateLimitMiddleware)
+      .forRoutes(
+        { path: 'auth/login', method: RequestMethod.POST },
+        { path: 'movies', method: RequestMethod.GET },
+        { path: 'auth/register', method: RequestMethod.POST },
+        { path: 'auth/verify-otp', method: RequestMethod.POST },
+        { path: 'auth/resend-otp', method: RequestMethod.POST },
+        { path: 'auth/refresh', method: RequestMethod.POST },
+      );
   }
 }
